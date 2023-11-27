@@ -1,0 +1,239 @@
+---
+title: "Nitro_DietSources"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Environment
+
+```{r}
+
+rm(list=ls())
+
+```
+
+## Set Working Directory
+
+```{r}
+
+ setwd("C:/Users/amikk/Documents/Rprojects/BrownBearDietThroughTime")
+
+```
+
+
+## Load Packages
+
+```{r}
+
+library(ggplot2)
+library(lme4)
+library(viridis)
+
+
+```
+
+
+
+## Graphing theme
+
+```{r}
+
+mytheme <- theme(
+    axis.text = element_text(size = 10,face = "bold"),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_line(color = "grey96"),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(colour = "black",linewidth = 1),
+    axis.ticks = element_line(linewidth = 1),
+    legend.position = "top"
+    )
+theme_set(mytheme)
+
+P <- palette(viridis(40))
+P <- palette(viridis(40))
+
+
+```
+
+
+## Data
+
+```{r}
+
+SI_Diet <- read.csv("Data\\RawBearData_SI_Proteins.csv")
+
+LastYr <- as.numeric(max(SI_Diet$year.represent))
+
+SI_Diet$year.represent <- as.numeric(SI_Diet$year.represent)
+SI_Diet$C13 <- as.numeric(SI_Diet$C13)
+
+C13.suess <- SI_Diet$C13-(+0.022*(LastYr-SI_Diet$year.represent))
+SI_Diet$C13.suess <- C13.suess
+
+SI_Diet$fYEAR <- as.factor(SI_Diet$year.represent)
+is.na(SI_Diet$N15)
+
+SI_Diet <- subset(SI_Diet, N15!="NA")
+SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
+
+names(SI_Diet[6]) <- "Repro"
+
+
+```
+
+
+## Functions
+
+```{r}
+
+rsq <- function (x, y) cor(x, y) ^ 2
+
+```
+
+
+
+# Linear regression models
+
+## Intercept model
+
+```{r}
+
+IntMod <- lmer(N15~1+(1|BearID),
+                data = SI_Diet)
+
+summary(IntMod)
+AIcc_Int <- wiqid::AICc(IntMod)
+
+```
+
+## Repro model
+
+```{r}
+
+ReproMod <- lmer(N15~reprostatus.represent+(1|BearID),
+                data = SI_Diet)
+
+summary(ReproMod)
+AIcc_Repro <- wiqid::AICc(ReproMod)
+
+```
+
+
+## Year model
+
+```{r}
+
+YearMod <- lmer(N15~fYEAR+(1|BearID),
+                data = SI_Diet)
+
+summary(YearMod)
+AIcc_Year <- wiqid::AICc(YearMod)
+
+```
+
+
+## Year + repro  model
+
+```{r}
+
+YearReproMod <- lmer(N15~fYEAR+
+                  reprostatus.represent+
+                  (1|BearID),
+                data = SI_Diet)
+
+summary(YearReproMod)
+AIcc_YearRepro <- wiqid::AICc(YearReproMod)
+
+```
+
+
+## Ants model
+
+```{r}
+
+AntMod <- lmer(N15~ Prop_Ants+
+                  (1|BearID),
+                data = SI_Diet)
+
+summary(AntMod)
+
+rsq(x=SI_Diet$Prop_Ants, y=SI_Diet$N15)
+
+AIcc_Ant <- wiqid::AICc(AntMod)
+
+```
+
+
+## Moose model
+
+```{r}
+
+MooseMod <- lmer(N15~ Prop_Moose+
+                  (1|BearID),
+                data = SI_Diet)
+
+summary(MooseMod)
+
+rsq(x=SI_Diet$Prop_Moose, y=SI_Diet$N15)
+AIcc_Moose <- wiqid::AICc(MooseMod)
+
+```
+
+
+
+## Bilberry model
+
+```{r}
+
+BilbMod <- lmer(N15~ Prop_BilBerry+
+                  (1|BearID),
+                data = SI_Diet)
+
+summary(BilbMod)
+
+rsq(x=SI_Diet$Prop_BilBerry, y=SI_Diet$N15)
+
+AIcc_Bilb <- wiqid::AICc(BilbMod)
+
+```
+
+
+# Top model output
+
+```{r}
+
+
+InitialTop <- ggplot(data = SI_Diet,
+       aes(x=Prop_Moose, y=N15))+
+  geom_jitter(aes(color=fYEAR,
+                 pch=reprostatus.represent),
+              width=0.0002,
+              size=1.5,
+              alpha=0.5)+
+  ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))+
+  xlab("Estimated proportion of Moose in Diet")+
+  scale_y_continuous(expand = c(0.001,0.001))+
+  scale_x_continuous(expand = c(0.001,0.001))+
+  scale_color_viridis(discrete = TRUE)+
+  labs(color="Year", pch="Repro status")+
+  geom_text(aes(label = paste("R^(", 2, ")", sep = "")),
+            size=6,
+            x=0.4,y=7)
+  
+  
+InitialTop  
+
+ggsave(plot = InitialTop,
+       "InitialTop_Moose.png",
+       width = 9.5, height = 7,
+       units = "in",
+       dpi = 750)
+
+```
+
