@@ -33,6 +33,8 @@ rm(list=ls())
 library(ggplot2)
 library(lme4)
 library(viridis)
+library(wiqid)
+library(AICcmodavg)
 
 
 ```
@@ -64,6 +66,8 @@ P <- palette(viridis(40))
 
 ## Data
 
+### Load Data
+
 ```{r}
 
 SI_Diet <- read.csv("Data\\RawBearData_SI_Proteins.csv")
@@ -82,10 +86,34 @@ is.na(SI_Diet$N15)
 SI_Diet <- subset(SI_Diet, N15!="NA")
 SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
 
-names(SI_Diet[6]) <- "Repro"
+names(SI_Diet)[6] <- "Repro"
+names(SI_Diet)[9] <- "Mass"
+
+SI_Diet_Mharv <- subset(SI_Diet, Moose_Harv!="NA")
+
 
 
 ```
+
+
+### Standardize cont. variables
+
+```{r}
+
+SI_Diet_Mharv$Zyear <- standardize(SI_Diet_Mharv$year.represent)
+SI_Diet_Mharv$ZN15 <- standardize(SI_Diet_Mharv$N15)
+SI_Diet_Mharv$Zmass <- standardize(SI_Diet_Mharv$Mass)
+SI_Diet_Mharv$Zprop_ants <- standardize(SI_Diet_Mharv$Prop_Ants)
+SI_Diet_Mharv$Zprop_moose <- standardize(SI_Diet_Mharv$Prop_Moose)
+SI_Diet_Mharv$Zprop_bilb <- standardize(SI_Diet_Mharv$Prop_BilBerry)
+SI_Diet_Mharv$Zharvest_moose <- standardize(SI_Diet_Mharv$Moose_Harv)
+SI_Diet_Mharv$Zobs_moose <- standardize(SI_Diet_Mharv$Moose_Obs)
+SI_Diet_Mharv$Zcalves <- standardize(SI_Diet_Mharv$Calves)
+SI_Diet_Mharv$Zbilb <- standardize(SI_Diet_Mharv$Bilberry)
+SI_Diet_Mharv$Zlingon <- standardize(SI_Diet_Mharv$Lingonberry)
+
+```
+
 
 
 ## Functions
@@ -96,31 +124,51 @@ rsq <- function (x, y) cor(x, y) ^ 2
 
 ```
 
+# Data distributions
+
+## heavy nitrogen
+
+```{r}
+
+ggplot(data = SI_Diet_Mharv, aes(N15))+
+  geom_histogram(binwidth = sd(SI_Diet_Mharv$N15))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  geom_vline(xintercept = mean(SI_Diet_Mharv$N15))
+
+
+ggplot(data = SI_Diet_Mharv, aes(N15, fill=fYEAR))+
+  geom_histogram(binwidth = sd(SI_Diet_Mharv$N15))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  geom_vline(xintercept = mean(SI_Diet_Mharv$N15),
+                               linewidth=1.2)+
+  scale_fill_viridis(option="B", discrete = TRUE)
+
+```
+
 
 
 # Linear regression models
+
+## Model Selection setup
+```{r}
+
+NitrogenModels <- list()
+
+
+```
+
 
 ## Intercept model
 
 ```{r}
 
-IntMod <- lmer(N15~1+(1|BearID),
-                data = SI_Diet)
+NitrogenModels[[1]] <- IntMod <- lmer(ZN15~1+(1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
 
 summary(IntMod)
 AIcc_Int <- wiqid::AICc(IntMod)
-
-```
-
-## Repro model
-
-```{r}
-
-ReproMod <- lmer(N15~reprostatus.represent+(1|BearID),
-                data = SI_Diet)
-
-summary(ReproMod)
-AIcc_Repro <- wiqid::AICc(ReproMod)
 
 ```
 
@@ -129,26 +177,11 @@ AIcc_Repro <- wiqid::AICc(ReproMod)
 
 ```{r}
 
-YearMod <- lmer(N15~fYEAR+(1|BearID),
-                data = SI_Diet)
+NitrogenModels[[2]] <-YearMod <- lmer(ZN15~Zyear+(1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
 
 summary(YearMod)
 AIcc_Year <- wiqid::AICc(YearMod)
-
-```
-
-
-## Year + repro  model
-
-```{r}
-
-YearReproMod <- lmer(N15~fYEAR+
-                  reprostatus.represent+
-                  (1|BearID),
-                data = SI_Diet)
-
-summary(YearReproMod)
-AIcc_YearRepro <- wiqid::AICc(YearReproMod)
 
 ```
 
@@ -157,31 +190,81 @@ AIcc_YearRepro <- wiqid::AICc(YearReproMod)
 
 ```{r}
 
-AntMod <- lmer(N15~ Prop_Ants+
-                  (1|BearID),
-                data = SI_Diet)
+AntMod <- lmer(ZN15~ Zprop_ants+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
 
 summary(AntMod)
 
-rsq(x=SI_Diet$Prop_Ants, y=SI_Diet$N15)
+rsq(x=SI_Diet_Mharv$Prop_Ants, y=SI_Diet_Mharv$N15)
 
 AIcc_Ant <- wiqid::AICc(AntMod)
 
 ```
 
 
-## Moose model
+## Moose diet model
 
 ```{r}
 
-MooseMod <- lmer(N15~ Prop_Moose+
-                  (1|BearID),
-                data = SI_Diet)
+MooseDietMod <- lmer(ZN15~ Zprop_moose+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
 
-summary(MooseMod)
+summary(MooseDietMod)
 
-rsq(x=SI_Diet$Prop_Moose, y=SI_Diet$N15)
-AIcc_Moose <- wiqid::AICc(MooseMod)
+rsq(x=SI_Diet_Mharv$Prop_Moose, y=SI_Diet_Mharv$N15)
+AIcc_DietMoose <- wiqid::AICc(MooseDietMod)
+
+```
+
+
+## Moose harvest model
+
+```{r}
+
+NitrogenModels[[3]] <-MooseHarvMod <- lmer(ZN15~ Zharvest_moose+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(MooseHarvMod)
+
+rsq(x=SI_Diet_Mharv$Moose_Harv, y=SI_Diet_Mharv$N15)
+AIcc_HarvMoose <- wiqid::AICc(MooseHarvMod)
+
+```
+
+
+## Calf observation model
+
+```{r}
+
+
+NitrogenModels[[4]] <-CalfMod <- lmer(ZN15~ Zcalves+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(CalfMod)
+
+rsq(x=SI_Diet_Mharv$Calves, y=SI_Diet_Mharv$N15)
+AIcc_Calf <- wiqid::AICc(CalfMod)
+
+```
+
+
+
+## Moose observation model
+
+```{r}
+
+NitrogenModels[[5]] <-MooseObsMod <- lmer(ZN15~ Zobs_moose+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(MooseObsMod)
+
+rsq(x=SI_Diet_Mharv$Moose_Obs, y=SI_Diet_Mharv$N15)
+AIcc_ObsMoose <- wiqid::AICc(MooseObsMod)
 
 ```
 
@@ -191,17 +274,66 @@ AIcc_Moose <- wiqid::AICc(MooseMod)
 
 ```{r}
 
-BilbMod <- lmer(N15~ Prop_BilBerry+
-                  (1|BearID),
-                data = SI_Diet)
+NitrogenModels[[6]] <-BilbMod <- lmer(ZN15~ Zbilb+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
 
 summary(BilbMod)
 
-rsq(x=SI_Diet$Prop_BilBerry, y=SI_Diet$N15)
+rsq(x=SI_Diet_Mharv$Bilberry, y=SI_Diet_Mharv$N15)
 
 AIcc_Bilb <- wiqid::AICc(BilbMod)
 
 ```
+
+
+## Lingonberry model
+
+```{r}
+
+NitrogenModels[[7]] <-LingMod <- lmer(ZN15~ Zlingon+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(LingMod)
+
+rsq(x=SI_Diet_Mharv$Lingonberry, y=SI_Diet_Mharv$N15)
+
+AIcc_Ling <- wiqid::AICc(LingMod)
+
+```
+
+
+### Model selection table
+
+```{r}
+
+NitroModelNames <- c("Intercept",
+                     "Year",
+                     "Moose Harvest",
+                     "Calf Observation",
+                     "Moose Observation",
+                     "Bilberry Index",
+                     "Lingonberry Index")
+
+##Generate and print AICc table
+print(aictab(cand.set = NitrogenModels,
+             modnames = NitroModelNames,
+             sort = TRUE),
+      digits = 4, #round to 4 digits after decimal point
+      LL = TRUE #give log-likelihood 
+      )
+
+write.csv(aictab(cand.set = NitrogenModels,
+                 modnames = NitroModelNames,
+                 sort = TRUE,
+                 second.ord=TRUE),
+          file="Results\\NitrogenModels.csv")
+
+
+
+```
+
 
 
 # Top model output
