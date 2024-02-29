@@ -1,0 +1,3393 @@
+---
+title: "SingleMales_DietEstimates"
+author: "Ashlee Mikkelsen"
+date: "2024-02-14"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Introduction
+
+This RMarkdown file is an extension of the original brown bear diet analysis that examined annual estimates of the different reproduction classes (BearDietAnalysis_Repro_SeperateAnnual) in the file path "~Rprojects/Diet-sensitivity-to-TDFs-and-priors/ReproductiveClassAnnual".
+
+The analysis has been growing and getting messy, and as MS 3 has evolved, I have started a new R project to focus on the research questioins and analysis we have defined.
+
+# Environment
+
+
+## Load data and packages
+
+```{r clean up and load packages, include=FALSE}
+# clear workspace and load packages
+rm(list = ls())
+```
+
+
+```{r clean up and load packages, include=FALSE}
+
+setwd("~Rprojects/BrownBearDietThroughTime")
+
+```
+
+
+
+
+```{r clean up and load packages, include=FALSE}
+library(readxl)
+library(viridis)
+library(ggplot2)
+library(MixSIAR)
+library(lme4)
+library(gridExtra)
+
+```
+
+NOTE: In excel I removed all columns but those pertinent to the analysis: C13.Suess, N15, BearID, and Reprostatus.represent. represent. I renamed the isotope columns to match the MixSIAR standard. I also converted my covariates into categorical covariates with a dummy variable of numbers for each category. For example, repro.status became repro where SolitaryF=1, SolitaryM=2,WithCubs=3,and WithMother=4. Year.represent was renamed yr with 1995=1 through 2015=20. BearID was changed to b1 through b378.
+
+## Graph theme
+
+```{r}
+
+
+mytheme <- theme(
+    axis.text = element_text(size = 12,face = "bold"),
+    axis.title = element_text(size = 14, face = "bold"),
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_line(color = "grey96"),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(colour = "black",linewidth = 1),
+    axis.ticks = element_line(linewidth = 1),
+    legend.position = "top",
+    legend.key = element_rect(fill = NULL)
+    )
+theme_set(mytheme)
+
+P <- palette(viridis(40))
+P <- palette(viridis(40))
+
+```
+
+
+
+# Full Data set
+
+### Load Data
+
+
+```{r load data, include=FALSE}
+
+mix.repro.annual.males <- load_mix_data(
+ filename = "SolitaryMales.csv",
+ iso_names = c("d13C","d15N"),
+ factors = "year",
+ fac_random = TRUE,
+ fac_nested = FALSE,
+ cont_effects = NULL
+)
+
+source <- load_source_data(
+ filename = "bears_sources_MIXSIAR_ConcDep_AnnualYr.csv",
+ source_factors = NULL,
+ conc_dep = TRUE,
+ data_type = "means",
+ mix.repro.annual.males
+)
+
+disc <- load_discr_data(
+ filename = "bears_discrimination_MixSIAR.csv",
+ mix.repro.annual.males
+)
+
+
+BearDietPriors_Simmr <- c(7,52,11,26,3)
+BearDietPriors_Alpha <-
+  BearDietPriors_Simmr*length(BearDietPriors_Simmr)/sum(BearDietPriors_Simmr)
+
+plot_prior(alpha.prior=BearDietPriors_AlphaSolMales,
+		   source=source,
+		   plot_save_pdf=TRUE,
+		   plot_save_png=TRUE,
+		   filename="prior_plot_BrownBear_inf")
+
+
+```
+
+
+### Plot data & Pre-run checks
+
+```{r}
+plot_data(
+ filename = "bear.repro.annual.2009_isospace_MixSIAR",
+ plot_save_pdf = TRUE,
+ plot_save_png = FALSE,
+ mix.repro.annual.males,
+ source,
+ disc
+ )
+
+calc_area(source=source,mix=mix.repro.annual.males,discr=disc)
+
+```
+
+
+
+### Write the JAGS model file
+```{r}
+
+model_filename <- "MixSIAR_Bear.Repro.annual_model.txt" # Name of the JAGS model file
+resid_err <- TRUE
+process_err <- TRUE
+write_JAGS_model(model_filename,
+                 resid_err,
+                 process_err,
+                 mix.repro.annual.males.subset,
+                 source)
+
+```
+
+
+
+### Run males prelim test model
+
+ran 22.01.2024 took took 1.27 minutes
+
+```{r, include=FALSE}
+
+start.time <- Sys.time()
+mix.repro.annual.males.subset.test <- run_model(
+ run = "test",
+ mix.repro.annual.males.subset,
+ source,
+ disc,
+ model_filename,
+ alpha.prior = BearDietPriors_SoMale_Alpha
+ )
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+```
+
+### Run real males model 
+
+began running extreme with informative priors 22.01.2024 took 
+
+
+```{r}
+
+start.time <- Sys.time()
+mix.repro.annual.males.subset.extreme <- run_model(
+  run ="extreme",
+  mix.repro.annual.males.subset,
+  source,
+  disc,
+  model_filename,
+  alpha.prior = BearDietPriors_Alpha
+)
+
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+
+
+BearDiet.repro.annual.males.subset <- mix.repro.annual.males.subset.extreme
+
+########################################
+output_options_malesSubsetPriors <- list(
+  summary_save = TRUE,
+  summary_name = "summary_statistics_malesSubsetPriors", 
+  sup_post = TRUE,                    
+  plot_post_save_pdf = FALSE,           
+  plot_post_name = "posterior_density_malesSubsetPriors",
+  sup_pairs = TRUE,             
+  plot_pairs_save_pdf = TRUE,    
+  plot_pairs_name = "pairs_plot_malesSubsetPriors",
+  sup_xy = TRUE,           
+  plot_xy_save_pdf = TRUE,
+  plot_xy_name = "xy_plot_malesSubsetPriors",
+  gelman = TRUE,
+  heidel = FALSE,  
+  geweke = TRUE,   
+  diag_save = TRUE,
+  diag_name = "diagnostics_malesSubsetPriors",
+  indiv_effect = FALSE,       
+  plot_post_save_png = FALSE, 
+  plot_pairs_save_png = FALSE,
+  plot_xy_save_png = FALSE,
+  diag_save_ggmcmc = FALSE,
+  return_obj = TRUE)
+
+
+df.stats_repro.annual.malesSubsetPriors <- output_stats(
+  BearDiet.repro.annual.males.subset,
+  mix.repro.annual.males.subset,
+  source,
+  output_options_malesSuibsetPriors)
+
+write.csv(df.stats_repro.annual.malesSubsetPriors,
+          "DfStats_ReproAnnual_malesSubsetPriors.csv")
+
+row.names(df.stats_repro.annual.malesSubsetPriors)
+
+
+```
+
+
+
+
+## Diagnostics
+
+```{r}
+
+diag.repro.annual.males <- output_diagnostics(BearDiet.repro.annual.males,
+                           mix.repro.annual.males, 
+                           source,
+                           output_options_malesPriors)
+names(diag.repro.annual.males)
+head(diag.repro.annual.males)
+
+```
+
+
+## Building data tables
+
+This matrix is set up so that each row is an estimate and it goes through all the years for each food source. So we have all the estimates for ants, year 1993 through 2020. For example, matrix element [9:35,2] are the mean estimates from year 1992 to 2020. The sims.list matrix within the jags output is an array with the 3000 estimates from the iterations, by 1:27 years, and the 1:5 food sources.
+
+```{r}
+df.stats_repro.annual.males <- read.csv("DfStats_ReproAnnual_malesPriors.csv")
+
+head(df.stats_repro.annual.males)
+
+SumStats.males <- (df.stats_repro.annual.males[3:22,c(1:3,9)])
+
+source$source_names
+
+DietEst.males.Ants <- as.data.frame(BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,,1])### creates a matrix of ant estimates for each year
+
+DietEst.males.1992 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,1,])#extracts a matrix of estimates for 1992 across all 5 food sources
+
+head(DietEst.males.1992)
+
+names(DietEst.males.1992)[1] <- "Ants"
+names(DietEst.males.1992)[2] <- "Bilberry"
+names(DietEst.males.1992)[3] <- "Crowberry"
+names(DietEst.males.1992)[4] <- "Lingonberry"
+names(DietEst.males.1992)[5] <- "Moose"
+DietEst.males.1992$Year <- "1992"
+
+##########     1995     #############################
+DietEst.males.1995 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,2,])#extracts a matrix of estimates for 1995 across all 5 food sources
+
+head(DietEst.males.1995)
+
+names(DietEst.males.1995)[1] <- "Ants"
+names(DietEst.males.1995)[2] <- "Bilberry"
+names(DietEst.males.1995)[3] <- "Crowberry"
+names(DietEst.males.1995)[4] <- "Lingonberry"
+names(DietEst.males.1995)[5] <- "Moose"
+DietEst.males.1995$Year <- "1995"
+
+ggplot(data = DietEst.males.1995)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     1996     #############################
+DietEst.males.1996 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,3,])#extracts a matrix of estimates for 1996 across all 5 food sources
+
+head(DietEst.males.1996)
+
+names(DietEst.males.1996)[1] <- "Ants"
+names(DietEst.males.1996)[2] <- "Bilberry"
+names(DietEst.males.1996)[3] <- "Crowberry"
+names(DietEst.males.1996)[4] <- "Lingonberry"
+names(DietEst.males.1996)[5] <- "Moose"
+DietEst.males.1996$Year <- "1996"
+
+ggplot(data = DietEst.males.1996)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1997     #############################
+DietEst.males.1997 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,4,])#extracts a matrix of estimates for 1997 across all 5 food sources
+
+head(DietEst.males.1997)
+
+names(DietEst.males.1997)[1] <- "Ants"
+names(DietEst.males.1997)[2] <- "Bilberry"
+names(DietEst.males.1997)[3] <- "Crowberry"
+names(DietEst.males.1997)[4] <- "Lingonberry"
+names(DietEst.males.1997)[5] <- "Moose"
+DietEst.males.1997$Year <- "1997"
+
+ggplot(data = DietEst.males.1997)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1998     #############################
+DietEst.males.1998 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,5,])#extracts a matrix of estimates for 1998 across all 5 food sources
+
+head(DietEst.males.1998)
+
+names(DietEst.males.1998)[1] <- "Ants"
+names(DietEst.males.1998)[2] <- "Bilberry"
+names(DietEst.males.1998)[3] <- "Crowberry"
+names(DietEst.males.1998)[4] <- "Lingonberry"
+names(DietEst.males.1998)[5] <- "Moose"
+DietEst.males.1998$Year <- "1998"
+
+ggplot(data = DietEst.males.1998)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1999     #############################
+DietEst.males.1999 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,6,])#extracts a matrix of estimates for 1999 across all 5 food sources
+
+head(DietEst.males.1999)
+
+names(DietEst.males.1999)[1] <- "Ants"
+names(DietEst.males.1999)[2] <- "Bilberry"
+names(DietEst.males.1999)[3] <- "Crowberry"
+names(DietEst.males.1999)[4] <- "Lingonberry"
+names(DietEst.males.1999)[5] <- "Moose"
+DietEst.males.1999$Year <- "1999"
+
+ggplot(data = DietEst.males.1999)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2000     #############################
+DietEst.males.2000 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,7,])#extracts a matrix of estimates for 2000 across all 5 food sources
+
+head(DietEst.males.2000)
+
+names(DietEst.males.2000)[1] <- "Ants"
+names(DietEst.males.2000)[2] <- "Bilberry"
+names(DietEst.males.2000)[3] <- "Crowberry"
+names(DietEst.males.2000)[4] <- "Lingonberry"
+names(DietEst.males.2000)[5] <- "Moose"
+DietEst.males.2000$Year <- "2000"
+
+ggplot(data = DietEst.males.2000)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2001     #############################
+DietEst.males.2001 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,8,])#extracts a matrix of estimates for 2001 across all 5 food sources
+
+head(DietEst.males.2001)
+
+names(DietEst.males.2001)[1] <- "Ants"
+names(DietEst.males.2001)[2] <- "Bilberry"
+names(DietEst.males.2001)[3] <- "Crowberry"
+names(DietEst.males.2001)[4] <- "Lingonberry"
+names(DietEst.males.2001)[5] <- "Moose"
+DietEst.males.2001$Year <- "2001"
+
+ggplot(data = DietEst.males.2001)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2002     #############################
+DietEst.males.2002 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,9,])#extracts a matrix of estimates for 2002 across all 5 food sources
+
+head(DietEst.males.2002)
+
+names(DietEst.males.2002)[1] <- "Ants"
+names(DietEst.males.2002)[2] <- "Bilberry"
+names(DietEst.males.2002)[3] <- "Crowberry"
+names(DietEst.males.2002)[4] <- "Lingonberry"
+names(DietEst.males.2002)[5] <- "Moose"
+DietEst.males.2002$Year <- "2002"
+
+ggplot(data = DietEst.males.2002)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2003     #############################
+DietEst.males.2003 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,10,])#extracts a matrix of estimates for 2003 across all 5 food sources
+
+head(DietEst.males.2003)
+
+names(DietEst.males.2003)[1] <- "Ants"
+names(DietEst.males.2003)[2] <- "Bilberry"
+names(DietEst.males.2003)[3] <- "Crowberry"
+names(DietEst.males.2003)[4] <- "Lingonberry"
+names(DietEst.males.2003)[5] <- "Moose"
+DietEst.males.2003$Year <- "2003"
+
+ggplot(data = DietEst.males.2003)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2004     #############################
+DietEst.males.2004 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,11,])#extracts a matrix of estimates for 2004 across all 5 food sources
+
+head(DietEst.males.2004)
+
+names(DietEst.males.2004)[1] <- "Ants"
+names(DietEst.males.2004)[2] <- "Bilberry"
+names(DietEst.males.2004)[3] <- "Crowberry"
+names(DietEst.males.2004)[4] <- "Lingonberry"
+names(DietEst.males.2004)[5] <- "Moose"
+DietEst.males.2004$Year <- "2004"
+
+ggplot(data = DietEst.males.2004)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2005     #############################
+DietEst.males.2005 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,12,])#extracts a matrix of estimates for 2005 across all 5 food sources
+
+head(DietEst.males.2005)
+
+names(DietEst.males.2005)[1] <- "Ants"
+names(DietEst.males.2005)[2] <- "Bilberry"
+names(DietEst.males.2005)[3] <- "Crowberry"
+names(DietEst.males.2005)[4] <- "Lingonberry"
+names(DietEst.males.2005)[5] <- "Moose"
+DietEst.males.2005$Year <- "2005"
+
+ggplot(data = DietEst.males.2005)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2006     #############################
+DietEst.males.2006 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,13,])#extracts a matrix of estimates for 2006 across all 5 food sources
+
+head(DietEst.males.2006)
+
+names(DietEst.males.2006)[1] <- "Ants"
+names(DietEst.males.2006)[2] <- "Bilberry"
+names(DietEst.males.2006)[3] <- "Crowberry"
+names(DietEst.males.2006)[4] <- "Lingonberry"
+names(DietEst.males.2006)[5] <- "Moose"
+DietEst.males.2006$Year <- "2006"
+
+ggplot(data = DietEst.males.2006)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+
+##########     2007     #############################
+DietEst.males.2007 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,14,])#extracts a matrix of estimates for 2007 across all 5 food sources
+
+head(DietEst.males.2007)
+
+names(DietEst.males.2007)[1] <- "Ants"
+names(DietEst.males.2007)[2] <- "Bilberry"
+names(DietEst.males.2007)[3] <- "Crowberry"
+names(DietEst.males.2007)[4] <- "Lingonberry"
+names(DietEst.males.2007)[5] <- "Moose"
+DietEst.males.2007$Year <- "2007"
+
+ggplot(data = DietEst.males.2007)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2008     #############################
+DietEst.males.2008 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,15,])#extracts a matrix of estimates for 2008 across all 5 food sources
+
+head(DietEst.males.2008)
+
+names(DietEst.males.2008)[1] <- "Ants"
+names(DietEst.males.2008)[2] <- "Bilberry"
+names(DietEst.males.2008)[3] <- "Crowberry"
+names(DietEst.males.2008)[4] <- "Lingonberry"
+names(DietEst.males.2008)[5] <- "Moose"
+DietEst.males.2008$Year <- "2008"
+
+ggplot(data = DietEst.males.2008)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2009     #############################
+DietEst.males.2009 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,16,])#extracts a matrix of estimates for 2009 across all 5 food sources
+
+head(DietEst.males.2009)
+
+names(DietEst.males.2009)[1] <- "Ants"
+names(DietEst.males.2009)[2] <- "Bilberry"
+names(DietEst.males.2009)[3] <- "Crowberry"
+names(DietEst.males.2009)[4] <- "Lingonberry"
+names(DietEst.males.2009)[5] <- "Moose"
+DietEst.males.2009$Year <- "2009"
+
+ggplot(data = DietEst.males.2009)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+
+##########     2010    #############################
+DietEst.males.2010 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,17,])#extracts a matrix of estimates for 2010 across all 5 food sources
+
+head(DietEst.males.2010)
+
+names(DietEst.males.2010)[1] <- "Ants"
+names(DietEst.males.2010)[2] <- "Bilberry"
+names(DietEst.males.2010)[3] <- "Crowberry"
+names(DietEst.males.2010)[4] <- "Lingonberry"
+names(DietEst.males.2010)[5] <- "Moose"
+DietEst.males.2010$Year <- "2010"
+ggplot(data = DietEst.males.2010)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2011     #############################
+DietEst.males.2011 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,18,])#extracts a matrix of estimates for 2011 across all 5 food sources
+head(DietEst.males.2011)
+names(DietEst.males.2011)[1] <- "Ants"
+names(DietEst.males.2011)[2] <- "Bilberry"
+names(DietEst.males.2011)[3] <- "Crowberry"
+names(DietEst.males.2011)[4] <- "Lingonberry"
+names(DietEst.males.2011)[5] <- "Moose"
+DietEst.males.2011$Year <- "2011"
+ggplot(data = DietEst.males.2011)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2012     #############################
+DietEst.males.2012 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,19,])#extracts a matrix of estimates for 2012 across all 5 food sources
+head(DietEst.males.2012)
+names(DietEst.males.2012)[1] <- "Ants"
+names(DietEst.males.2012)[2] <- "Bilberry"
+names(DietEst.males.2012)[3] <- "Crowberry"
+names(DietEst.males.2012)[4] <- "Lingonberry"
+names(DietEst.males.2012)[5] <- "Moose"
+DietEst.males.2012$Year <- "2012"
+ggplot(data = DietEst.males.2012)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2013     #############################
+DietEst.males.2013 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,20,])#extracts a matrix of estimates for 2013 across all 5 food sources
+head(DietEst.males.2013)
+names(DietEst.males.2013)[1] <- "Ants"
+names(DietEst.males.2013)[2] <- "Bilberry"
+names(DietEst.males.2013)[3] <- "Crowberry"
+names(DietEst.males.2013)[4] <- "Lingonberry"
+names(DietEst.males.2013)[5] <- "Moose"
+DietEst.males.2013$Year <- "2013"
+ggplot(data = DietEst.males.2013)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2014     #############################
+DietEst.males.2014 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,21,])#extracts a matrix of estimates for 2014 across all 5 food sources
+head(DietEst.males.2014)
+names(DietEst.males.2014)[1] <- "Ants"
+names(DietEst.males.2014)[2] <- "Bilberry"
+names(DietEst.males.2014)[3] <- "Crowberry"
+names(DietEst.males.2014)[4] <- "Lingonberry"
+names(DietEst.males.2014)[5] <- "Moose"
+DietEst.males.2014$Year <- "2014"
+ggplot(data = DietEst.males.2014)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2015     #############################
+DietEst.males.2015 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,22,])#extracts a matrix of estimates for 2015 across all 5 food sources
+head(DietEst.males.2015)
+names(DietEst.males.2015)[1] <- "Ants"
+names(DietEst.males.2015)[2] <- "Bilberry"
+names(DietEst.males.2015)[3] <- "Crowberry"
+names(DietEst.males.2015)[4] <- "Lingonberry"
+names(DietEst.males.2015)[5] <- "Moose"
+DietEst.males.2015$Year <- "2015"
+ggplot(data = DietEst.males.2015)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2016     #############################
+DietEst.males.2016 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,23,])#extracts a matrix of estimates for 2016 across all 5 food sources
+head(DietEst.males.2016)
+names(DietEst.males.2016)[1] <- "Ants"
+names(DietEst.males.2016)[2] <- "Bilberry"
+names(DietEst.males.2016)[3] <- "Crowberry"
+names(DietEst.males.2016)[4] <- "Lingonberry"
+names(DietEst.males.2016)[5] <- "Moose"
+DietEst.males.2016$Year <- "2016"
+ggplot(data = DietEst.males.2016)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2017     #############################
+DietEst.males.2017 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,24,])#extracts a matrix of estimates for 2017 across all 5 food sources
+head(DietEst.males.2017)
+names(DietEst.males.2017)[1] <- "Ants"
+names(DietEst.males.2017)[2] <- "Bilberry"
+names(DietEst.males.2017)[3] <- "Crowberry"
+names(DietEst.males.2017)[4] <- "Lingonberry"
+names(DietEst.males.2017)[5] <- "Moose"
+DietEst.males.2017$Year <- "2017"
+ggplot(data = DietEst.males.2017)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2018     #############################
+DietEst.males.2018 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,25,])#extracts a matrix of estimates for 2018 across all 5 food sources
+head(DietEst.males.2018)
+names(DietEst.males.2018)[1] <- "Ants"
+names(DietEst.males.2018)[2] <- "Bilberry"
+names(DietEst.males.2018)[3] <- "Crowberry"
+names(DietEst.males.2018)[4] <- "Lingonberry"
+names(DietEst.males.2018)[5] <- "Moose"
+DietEst.males.2018$Year <- "2018"
+ggplot(data = DietEst.males.2018)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2019     #############################
+DietEst.males.2019 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,26,])#extracts a matrix of estimates for 2019 across all 5 food sources
+head(DietEst.males.2019)
+names(DietEst.males.2019)[1] <- "Ants"
+names(DietEst.males.2019)[2] <- "Bilberry"
+names(DietEst.males.2019)[3] <- "Crowberry"
+names(DietEst.males.2019)[4] <- "Lingonberry"
+names(DietEst.males.2019)[5] <- "Moose"
+DietEst.males.2019$Year <- "2019"
+ggplot(data = DietEst.males.2019)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2020     #############################
+DietEst.males.2020 <-as.data.frame( BearDiet.repro.annual.males$BUGSoutput$sims.list$p.fac1[,27,])#extracts a matrix of estimates for 2020 across all 5 food sources
+head(DietEst.males.2020)
+names(DietEst.males.2020)[1] <- "Ants"
+names(DietEst.males.2020)[2] <- "Bilberry"
+names(DietEst.males.2020)[3] <- "Crowberry"
+names(DietEst.males.2020)[4] <- "Lingonberry"
+names(DietEst.males.2020)[5] <- "Moose"
+DietEst.males.2020$Year <- "2020"
+
+ggplot(data = DietEst.males.2020)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+###############################################
+
+BearDietEst.males.Posterior.Priors <- rbind(DietEst.males.1995,
+                                     DietEst.males.1996,
+                                     DietEst.males.1997,
+                                     DietEst.males.1998,
+                                     DietEst.males.1999,
+                                     DietEst.males.2000,
+                                     DietEst.males.2001,
+                                     DietEst.males.2002,
+                                     DietEst.males.2003,
+                                     DietEst.males.2004,
+                                     DietEst.males.2005,
+                                     DietEst.males.2006,
+                                     DietEst.males.2007,
+                                     DietEst.males.2008,
+                                     DietEst.males.2009,
+                                     DietEst.males.2010,
+                                     DietEst.males.2011,
+                                     DietEst.males.2012,
+                                     DietEst.males.2013,
+                                     DietEst.males.2014,
+                                     DietEst.males.2015,
+                                     DietEst.males.2016,
+                                     DietEst.males.2017,
+                                     DietEst.males.2018,
+                                     DietEst.males.2019,
+                                     DietEst.males.2020)
+
+
+write.csv(BearDietEst.males.Posterior.Priors, "SfemPosteriors_Priors.csv")
+
+```
+
+
+```{r}
+
+BearDietEst.males.Posterior<-read.csv("SfemPosteriors.csv")
+BearDietEst.males.Posterior.Priors<-read.csv("SfemPosteriors_Priors.csv")
+
+males.posterior.ByYear.fig<-ggplot(data = BearDietEst.males.Posterior)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks=seq(0,1,0.5))+
+  facet_wrap(~Year)+
+  theme(axis.text = element_text(size=8))+
+  xlab("Posterior distribution of food source proportions")
+
+males.posterior.ByYear.fig
+
+ggsave(plot=males.posterior.ByYear.fig,
+       "maless.Posterior.AllYears.png",
+       width = 13.5,
+       height = 10,
+       units = "in",
+       dpi = 900)
+
+```
+
+
+
+Same figure as above, but using posterior estimates modeled with inforamtive priors
+
+```{r}
+
+
+BearDietEst.males.Posterior.Priors<-read.csv("SfemPosteriors_Priors.csv")
+
+males.posterior.ByYear.fig.Priors<-
+  ggplot(data = BearDietEst.males.Posterior.Priors)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks=seq(0,1,0.5))+
+  facet_wrap(~Year)+
+  theme(axis.text = element_text(size=8))+
+  xlab("Posterior distribution of food source proportions")
+
+males.posterior.ByYear.fig.Priors
+
+ggsave(plot=males.posterior.ByYear.fig.Priors,
+       "maless.Posterior.AllYears.Priors.png",
+       width = 13.5,
+       height = 10,
+       units = "in",
+       dpi = 900)
+
+
+
+```
+
+
+## Graphical output
+
+### All sources across all years
+
+```{r}
+BearDietEst.males.Posterior <- read.csv("SfemPosteriors.csv")
+
+SF_Post_Full <- ggplot(data = BearDietEst.males.Posterior)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,60000,10000))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks = seq(0,0.75,0.25))+
+  geom_text(label="Ants",
+            size=5,
+            x=0.10, y= 35000,
+            color=P[1])+
+  geom_text(label="Bilberry",
+            size=5,
+            x=0.70, y= 10000,
+            color=P[10])+
+  geom_text(label="Crowberry",
+            size=5,
+            x=0.4, y= 9500,
+            color=P[20])+
+  geom_text(label="Lingonberry",
+            size=5,
+            x=0.2, y= 14000,
+            color=P[30])+
+  geom_text(label="Moose",
+            size=5,
+            x=0.1, y= 45000,
+            color=P[40])
+
+
+SF_Post_Full
+
+ggsave(plot = SF_Post_Full,
+       "SF_Post_Full.png",
+       width = 5, height = 4,
+       units = "in",
+       dpi = 700)
+
+
+####### means across year
+
+
+#### posterior distribution plot
+
+ggplot(data = BearDietEst.males.Posterior)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks = seq(0,0.75,0.25))+
+  facet_wrap(~Year)
+
+################# Line and dot figure
+
+AnnualSfemBearEst <- read.csv("DfStats_ReproAnnual_males_clean.csv")
+library(ggplot2)
+library(viridis)
+
+males.posterior.ByYear.LineDot.fig<-ggplot(data = AnnualSfemBearEst,
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI,ymax=UCI,
+                  fill=Source, group=Source,
+                  color=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,
+                group=Source),
+           linewidth=1.2 )+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=4)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete = TRUE)+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,1),
+                     breaks = seq(0,1,0.25))+
+  ylab("Mean posterior estimate of dietary proportions\nSingle females")
+
+males.posterior.ByYear.LineDot.fig
+
+ggsave(plot=males.posterior.ByYear.LineDot.fig,
+       "males_Posterior_AllYears_LineDot.png",
+       width = 11.5,
+       height = 9,
+       units = "in",
+       dpi = 900)
+
+
+```
+
+Same figure as above, only with informative priors
+
+```{r}
+
+####### means across year
+
+AnnualSfemBearEst.Priors <-
+  read.csv("DfStats_ReproAnnual_malesPriors_clean.csv")
+
+malesPriors.posterior.ByYear.LineDot.fig<-
+  ggplot(data = AnnualSfemBearEst.Priors,
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI,ymax=UCI,
+                  fill=Source, group=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,
+                group=Source),
+           linewidth=1.2 )+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=4)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete = TRUE)+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0))+
+  ylab("Mean posterior estimate of dietary proportions")
+
+malesPriors.posterior.ByYear.LineDot.fig
+
+ggsave(plot=males.posterior.ByYear.LineDot.fig,
+       "males.Posterior.AllYears.LineDot.png",
+       width = 11.5,
+       height = 9,
+       units = "in",
+       dpi = 900)
+
+
+
+
+```
+
+
+
+```{r}
+
+
+
+males.posterior.All.fig <- ggplot(BearDietEst.males.Posterior)+
+  geom_area(aes(x=Ants),
+            stat="bin",
+            bins=100,
+            fill=P[1],
+            color=P[1],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Bilberry),
+            stat="bin",
+            bins=100,
+            fill=P[10],
+            color=P[10],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Crowberry),
+            stat="bin",
+            bins=100,
+            fill=P[20],
+            color=P[20],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Lingonberry),
+            stat="bin",
+            bins=100,
+            fill=P[30],
+            color=P[30],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Moose),
+            stat="bin",
+            bins=100,
+            fill=P[40],
+            color=P[40],
+            alpha=0.4,
+            linewidth=1)+
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,60000))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks=seq(0,0.75,0.25))+
+  xlab("Estimated dietary proportion")+
+  ylab("Frequency in posterior estimates")+
+  geom_text(label="Ants",
+            x=0.075, y=38000,
+            size=5,
+            color=P[1])+
+  geom_text(label="Bilberry",
+            x=0.6, y=8200,
+            size=5,
+            color=P[10])+
+  geom_text(label="Crowberry",
+            x=0.3, y=9500,
+            size=5,
+            color=P[20])+
+  geom_text(label="Lingonberry",
+            x=0.18, y=13000,
+            size=5,
+            color=P[30])+
+  geom_text(label="Moose",
+            x=0.09, y=45000,
+            size=5,
+            color=P[40])
+
+males.posterior.All.fig
+
+ggsave(plot=males.posterior.All.fig,
+       "males_PosteriorDistribution_AllYears.png",
+       width = 7,
+       height = 6,
+       units = "in",
+       dpi = 900)
+
+
+```
+
+
+
+
+### specific food groups
+
+#### Protein contributions
+
+```{r}
+
+Trash1<-subset(AnnualSfemBearEst,Source!="Crowberry")
+Trash2<-subset(Trash1,Source!="Bilberry")
+SF.Proteins<-subset(Trash1,Source!="Lingonberry")
+
+
+write.csv(SF.Proteins,
+          "Proteins_SF.csv")
+
+males.Proteins.ByYear.LineDot.fig<-ggplot(data =SF.Proteins,
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI,ymax=UCI,
+                  fill=Source, group=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,
+                group=Source),
+           linewidth=1.2 )+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=4)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete = TRUE)+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0))+
+  ylab("Mean Posterior Diet Proportion")
+
+males.Proteins.ByYear.LineDot.fig
+
+ggsave(plot=males.Proteins.ByYear.LineDot.fig,
+       "males.Proteins.AllYears.LineDot.png",
+       width = 7,
+       height = 6,
+       units = "in",
+       dpi = 900)
+
+
+
+```
+
+
+
+
+# Data subset without C outliers
+
+### Load Data
+
+
+```{r load data, include=FALSE}
+
+mix.repro.annual.Smale.subset <- load_mix_data(
+ filename = "Data/SolitaryMales_NoOutliers.csv",
+ iso_names = c("d13C","d15N"),
+ factors = "year",
+ fac_random = TRUE,
+ fac_nested = FALSE,
+ cont_effects = NULL
+)
+
+source <- load_source_data(
+ filename = "Data/bears_sources_MIXSIAR_ConcDep_AnnualYr.csv",
+ source_factors = NULL,
+ conc_dep = TRUE,
+ data_type = "means",
+ mix.repro.annual.Smale.subset
+)
+
+disc <- load_discr_data(
+ filename = "Data/bears_discrimination_MixSIAR.csv",
+ mix.repro.annual.Smale.subset
+)
+
+
+BearDietPriors_Simmr <- c(7,52,11,26,3)
+BearDietPriors_SoMale_Alpha <-
+  BearDietPriors_Simmr*length(BearDietPriors_Simmr)/sum(BearDietPriors_Simmr)
+
+plot_prior(alpha.prior=BearDietPriors_SoMale_Alpha,
+		   source=source,
+		   plot_save_pdf=TRUE,
+		   plot_save_png=TRUE,
+		   filename="prior_plot_BrownBear_inf")
+
+
+```
+
+
+### Plot data & Pre-run checks
+
+```{r}
+plot_data(
+ filename = "bear.repro.annual.SolMalesSubset_isospace_MixSIAR",
+ plot_save_pdf = TRUE,
+ plot_save_png = TRUE,
+ mix.repro.annual.Smale.subset,
+ source,
+ disc
+ )
+
+calc_area(source=source,mix=mix.repro.annual.Smale.subset,discr=disc)
+
+```
+
+
+
+### Write the JAGS model file
+```{r}
+
+model_filename <- "MixSIAR_Bear.Repro.annual_model.txt" # Name of the JAGS model file
+resid_err <- TRUE
+process_err <- TRUE
+write_JAGS_model(model_filename,
+                 resid_err,
+                 process_err,
+                 mix.repro.annual.Smale.subset,
+                 source)
+
+```
+
+
+
+### Run Smale prelim test model
+
+14.02.2024- took 1.25 minutes
+23.02.2024- took 1.22 minutes
+
+```{r, include=FALSE}
+
+start.time <- Sys.time()
+mix.repro.annual.Smale.Subset.test <- run_model(
+ run = "test",
+ mix.repro.annual.Smale.subset,
+ source,
+ disc,
+ model_filename,
+ alpha.prior = BearDietPriors_SoMale_Alpha
+ )
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+```
+
+### Run extreme Smale model on extreme settings
+
+
+14.02.2024- began running with informative priors and took
+
+```{r}
+
+start.time <- Sys.time()
+mix.repro.annual.Smale.subset.extreme <- run_model(
+  run ="extreme",
+  mix.repro.annual.Smale.subset,
+  source,
+  disc,
+  model_filename,
+  alpha.prior = BearDietPriors_SoMale_Alpha
+)
+
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+
+BearDiet.repro.annual.Smale.subset <- mix.repro.annual.Smale.subset.extreme
+#save.image("BearDietEstimates_ReproAnnual_SmalePriors.RData")
+
+########################################
+output_options_SmaleSubsetPriors <- list(
+  summary_save = TRUE,                 
+  summary_name = "summary_statistics_SmaleSubsetPriors", 
+  sup_post = TRUE,                    
+  plot_post_save_pdf = FALSE,           
+  plot_post_name = "posterior_density_SmaleSubsetPriors",
+  sup_pairs = TRUE,             
+  plot_pairs_save_pdf = TRUE,    
+  plot_pairs_name = "pairs_plot_SmaleSubsetPriors",
+  sup_xy = TRUE,           
+  plot_xy_save_pdf = TRUE,
+  plot_xy_name = "xy_plot_SmaleSubsetPriors",
+  gelman = TRUE,
+  heidel = FALSE,  
+  geweke = TRUE,   
+  diag_save = TRUE,
+  diag_name = "diagnostics_SmaleSubsetPriors",
+  indiv_effect = FALSE,       
+  plot_post_save_png = FALSE, 
+  plot_pairs_save_png = FALSE,
+  plot_xy_save_png = FALSE,
+  diag_save_ggmcmc = FALSE,
+  return_obj = TRUE)
+
+
+df.stats_repro.annual.SmaleSubsetPriors <- output_stats(
+  BearDiet.repro.annual.Smale.subset,
+  mix.repro.annual.Smale.subset,
+  source,
+  output_options_SmaleSubsetPriors)
+
+write.csv(df.stats_repro.annual.SmaleSubsetPriors,
+          "Results/DfStats_ReproAnnual_SmaleSubsetPriors.csv")
+
+row.names(df.stats_repro.annual.SmaleSubsetPriors)
+
+
+```
+
+
+
+
+## Diagnostics
+
+```{r}
+
+diag.repro.annual.Smale.subset <- output_diagnostics(BearDiet.repro.annual.Smale.subset,                                    mix.repro.annual.Smale.subset,
+                         source,
+                         output_options_SmaleSubsetPriors)
+names(diag.repro.annual.Smale.subset)
+head(diag.repro.annual.Smale.subset)
+
+```
+
+
+## Building data tables
+
+This matrix is set up so that each row is an estimate and it goes through all the years for each food source. So we have all the estimates for ants, year 1993 through 2020. For example, matrix element [9:35,2] are the mean estimates from year 1992 to 2020. The sims.list matrix within the jags output is an array with the 3000 estimates from the iterations, by 1:27 years, and the 1:5 food sources.
+
+```{r}
+df.stats_repro.annual.Smale.Subset <- read.csv("DfStats_ReproAnnual_SmaleSubsetPriors.csv")
+
+head(df.stats_repro.annual.Smale.Subset)
+
+SumStats.Smale.Subset <- (df.stats_repro.annual.Smale.Subset[3:22,c(1:3,9)])
+
+source$source_names
+
+DietEst.Smale.Ants.Subset <- as.data.frame(BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,,1])### creates a matrix of ant estimates for each year
+
+
+
+
+##########     1995     #############################
+DietEst.Smale.1995.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,2,])#extracts a matrix of estimates for 1995 across all 5 food sources
+
+head(DietEst.Smale.1995.Subset)
+
+names(DietEst.Smale.1995.Subset)[1] <- "Ants"
+names(DietEst.Smale.1995.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.1995.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.1995.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.1995.Subset)[5] <- "Moose"
+DietEst.Smale.1995.Subset$Year <- "1995"
+
+ggplot(data = DietEst.Smale.1995.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     1996     #############################
+DietEst.Smale.1996.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,3,])#extracts a matrix of estimates for 1996 across all 5 food sources
+
+head(DietEst.Smale.1996.Subset)
+
+names(DietEst.Smale.1996.Subset)[1] <- "Ants"
+names(DietEst.Smale.1996.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.1996.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.1996.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.1996.Subset)[5] <- "Moose"
+DietEst.Smale.1996.Subset$Year <- "1996"
+
+ggplot(data = DietEst.Smale.1996.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1997     #############################
+DietEst.Smale.1997.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,4,])#extracts a matrix of estimates for 1997 across all 5 food sources
+
+head(DietEst.Smale.1997.Subset)
+
+names(DietEst.Smale.1997.Subset)[1] <- "Ants"
+names(DietEst.Smale.1997.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.1997.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.1997.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.1997.Subset)[5] <- "Moose"
+DietEst.Smale.1997.Subset$Year <- "1997"
+
+ggplot(data = DietEst.Smale.1997.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1998     #############################
+DietEst.Smale.1998.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,5,])#extracts a matrix of estimates for 1998 across all 5 food sources
+
+head(DietEst.Smale.1998.Subset)
+
+names(DietEst.Smale.1998.Subset)[1] <- "Ants"
+names(DietEst.Smale.1998.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.1998.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.1998.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.1998.Subset)[5] <- "Moose"
+DietEst.Smale.1998.Subset$Year <- "1998"
+
+ggplot(data = DietEst.Smale.1998.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     1999     #############################
+DietEst.Smale.1999.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,6,])#extracts a matrix of estimates for 1999 across all 5 food sources
+
+head(DietEst.Smale.1999.Subset)
+
+names(DietEst.Smale.1999.Subset)[1] <- "Ants"
+names(DietEst.Smale.1999.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.1999.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.1999.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.1999.Subset)[5] <- "Moose"
+DietEst.Smale.1999.Subset$Year <- "1999"
+
+ggplot(data = DietEst.Smale.1999.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2000     #############################
+DietEst.Smale.2000.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,7,])#extracts a matrix of estimates for 2000 across all 5 food sources
+
+head(DietEst.Smale.2000.Subset)
+
+names(DietEst.Smale.2000.Subset)[1] <- "Ants"
+names(DietEst.Smale.2000.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2000.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2000.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2000.Subset)[5] <- "Moose"
+DietEst.Smale.2000.Subset$Year <- "2000"
+
+ggplot(data = DietEst.Smale.2000.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2001     #############################
+DietEst.Smale.2001.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,8,])#extracts a matrix of estimates for 2001 across all 5 food sources
+
+head(DietEst.Smale.2001.Subset)
+
+names(DietEst.Smale.2001.Subset)[1] <- "Ants"
+names(DietEst.Smale.2001.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2001.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2001.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2001.Subset)[5] <- "Moose"
+DietEst.Smale.2001.Subset$Year <- "2001"
+
+ggplot(data = DietEst.Smale.2001.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2002     #############################
+DietEst.Smale.2002.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,9,])#extracts a matrix of estimates for 2002 across all 5 food sources
+
+head(DietEst.Smale.2002.Subset)
+
+names(DietEst.Smale.2002.Subset)[1] <- "Ants"
+names(DietEst.Smale.2002.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2002.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2002.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2002.Subset)[5] <- "Moose"
+DietEst.Smale.2002.Subset$Year <- "2002"
+
+ggplot(data = DietEst.Smale.2002.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2003     #############################
+DietEst.Smale.2003.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,10,])#extracts a matrix of estimates for 2003 across all 5 food sources
+
+head(DietEst.Smale.2003.Subset)
+
+names(DietEst.Smale.2003.Subset)[1] <- "Ants"
+names(DietEst.Smale.2003.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2003.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2003.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2003.Subset)[5] <- "Moose"
+DietEst.Smale.2003.Subset$Year <- "2003"
+
+ggplot(data = DietEst.Smale.2003.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2004     #############################
+DietEst.Smale.2004.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,11,])#extracts a matrix of estimates for 2004 across all 5 food sources
+
+head(DietEst.Smale.2004.Subset)
+
+names(DietEst.Smale.2004.Subset)[1] <- "Ants"
+names(DietEst.Smale.2004.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2004.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2004.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2004.Subset)[5] <- "Moose"
+DietEst.Smale.2004.Subset$Year <- "2004"
+
+ggplot(data = DietEst.Smale.2004.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2005     #############################
+DietEst.Smale.2005.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,12,])#extracts a matrix of estimates for 2005 across all 5 food sources
+
+head(DietEst.Smale.2005.Subset)
+
+names(DietEst.Smale.2005.Subset)[1] <- "Ants"
+names(DietEst.Smale.2005.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2005.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2005.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2005.Subset)[5] <- "Moose"
+DietEst.Smale.2005.Subset$Year <- "2005"
+
+ggplot(data = DietEst.Smale.2005.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2006     #############################
+DietEst.Smale.2006.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,13,])#extracts a matrix of estimates for 2006 across all 5 food sources
+
+head(DietEst.Smale.2006.Subset)
+
+names(DietEst.Smale.2006.Subset)[1] <- "Ants"
+names(DietEst.Smale.2006.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2006.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2006.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2006.Subset)[5] <- "Moose"
+DietEst.Smale.2006.Subset$Year <- "2006"
+
+ggplot(data = DietEst.Smale.2006.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+
+##########     2007     #############################
+DietEst.Smale.2007.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,14,])#extracts a matrix of estimates for 2007 across all 5 food sources
+
+head(DietEst.Smale.2007.Subset)
+
+names(DietEst.Smale.2007.Subset)[1] <- "Ants"
+names(DietEst.Smale.2007.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2007.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2007.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2007.Subset)[5] <- "Moose"
+DietEst.Smale.2007.Subset$Year <- "2007"
+
+ggplot(data = DietEst.Smale.2007.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2008     #############################
+DietEst.Smale.2008.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,15,])#extracts a matrix of estimates for 2008 across all 5 food sources
+
+head(DietEst.Smale.2008.Subset)
+
+names(DietEst.Smale.2008.Subset)[1] <- "Ants"
+names(DietEst.Smale.2008.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2008.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2008.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2008.Subset)[5] <- "Moose"
+DietEst.Smale.2008.Subset$Year <- "2008"
+
+ggplot(data = DietEst.Smale.2008.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2009     #############################
+DietEst.Smale.2009.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,16,])#extracts a matrix of estimates for 2009 across all 5 food sources
+
+head(DietEst.Smale.2009.Subset)
+
+names(DietEst.Smale.2009.Subset)[1] <- "Ants"
+names(DietEst.Smale.2009.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2009.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2009.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2009.Subset)[5] <- "Moose"
+DietEst.Smale.2009.Subset$Year <- "2009"
+
+ggplot(data = DietEst.Smale.2009.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+
+##########     2010    #############################
+DietEst.Smale.2010.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,17,])#extracts a matrix of estimates for 2010 across all 5 food sources
+
+head(DietEst.Smale.2010.Subset)
+
+names(DietEst.Smale.2010.Subset)[1] <- "Ants"
+names(DietEst.Smale.2010.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2010.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2010.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2010.Subset)[5] <- "Moose"
+DietEst.Smale.2010.Subset$Year <- "2010"
+ggplot(data = DietEst.Smale.2010.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2011     #############################
+DietEst.Smale.2011.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,18,])#extracts a matrix of estimates for 2011 across all 5 food sources
+head(DietEst.Smale.2011.Subset)
+names(DietEst.Smale.2011.Subset)[1] <- "Ants"
+names(DietEst.Smale.2011.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2011.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2011.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2011.Subset)[5] <- "Moose"
+DietEst.Smale.2011.Subset$Year <- "2011"
+ggplot(data = DietEst.Smale.2011.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+
+##########     2012     #############################
+DietEst.Smale.2012.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,19,])#extracts a matrix of estimates for 2012 across all 5 food sources
+head(DietEst.Smale.2012.Subset)
+names(DietEst.Smale.2012.Subset)[1] <- "Ants"
+names(DietEst.Smale.2012.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2012.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2012.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2012.Subset)[5] <- "Moose"
+DietEst.Smale.2012.Subset$Year <- "2012"
+ggplot(data = DietEst.Smale.2012.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2013     #############################
+DietEst.Smale.2013.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,20,])#extracts a matrix of estimates for 2013 across all 5 food sources
+head(DietEst.Smale.2013.Subset)
+names(DietEst.Smale.2013.Subset)[1] <- "Ants"
+names(DietEst.Smale.2013.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2013.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2013.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2013.Subset)[5] <- "Moose"
+DietEst.Smale.2013.Subset$Year <- "2013"
+ggplot(data = DietEst.Smale.2013.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2014     #############################
+
+# No samples from 2014
+
+##########     2015     #############################
+# No samples from 2015
+
+
+##########     2016     #############################
+DietEst.Smale.2016.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,21,])#extracts a matrix of estimates for 2016 across all 5 food sources
+head(DietEst.Smale.2016.Subset)
+names(DietEst.Smale.2016.Subset)[1] <- "Ants"
+names(DietEst.Smale.2016.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2016.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2016.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2016.Subset)[5] <- "Moose"
+DietEst.Smale.2016.Subset$Year <- "2016"
+ggplot(data = DietEst.Smale.2016.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2017     #############################
+DietEst.Smale.2017.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,22,])#extracts a matrix of estimates for 2017 across all 5 food sources
+head(DietEst.Smale.2017.Subset)
+names(DietEst.Smale.2017.Subset)[1] <- "Ants"
+names(DietEst.Smale.2017.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2017.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2017.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2017.Subset)[5] <- "Moose"
+DietEst.Smale.2017.Subset$Year <- "2017"
+ggplot(data = DietEst.Smale.2017.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2018     #############################
+DietEst.Smale.2018.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,23,])#extracts a matrix of estimates for 2018 across all 5 food sources
+head(DietEst.Smale.2018.Subset)
+names(DietEst.Smale.2018.Subset)[1] <- "Ants"
+names(DietEst.Smale.2018.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2018.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2018.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2018.Subset)[5] <- "Moose"
+DietEst.Smale.2018.Subset$Year <- "2018"
+ggplot(data = DietEst.Smale.2018.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2019     #############################
+DietEst.Smale.2019.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,24,])#extracts a matrix of estimates for 2019 across all 5 food sources
+head(DietEst.Smale.2019.Subset)
+names(DietEst.Smale.2019.Subset)[1] <- "Ants"
+names(DietEst.Smale.2019.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2019.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2019.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2019.Subset)[5] <- "Moose"
+DietEst.Smale.2019.Subset$Year <- "2019"
+ggplot(data = DietEst.Smale.2019.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+##########     2020     #############################
+DietEst.Smale.2020.Subset <-as.data.frame( BearDiet.repro.annual.Smale.subset$BUGSoutput$sims.list$p.fac1[,25,])#extracts a matrix of estimates for 2020 across all 5 food sources
+head(DietEst.Smale.2020.Subset)
+names(DietEst.Smale.2020.Subset)[1] <- "Ants"
+names(DietEst.Smale.2020.Subset)[2] <- "Bilberry"
+names(DietEst.Smale.2020.Subset)[3] <- "Crowberry"
+names(DietEst.Smale.2020.Subset)[4] <- "Lingonberry"
+names(DietEst.Smale.2020.Subset)[5] <- "Moose"
+DietEst.Smale.2020.Subset$Year <- "2020"
+
+ggplot(data = DietEst.Smale.2020.Subset)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+###############################################
+
+BearDietEst.SmaleSubset.Posterior.Priors <- rbind(
+  DietEst.Smale.1995.Subset,
+  DietEst.Smale.1996.Subset,
+  DietEst.Smale.1997.Subset,
+  DietEst.Smale.1998.Subset,
+  DietEst.Smale.1999.Subset,
+  DietEst.Smale.2000.Subset,
+  DietEst.Smale.2001.Subset,
+  DietEst.Smale.2002.Subset,
+  DietEst.Smale.2003.Subset,
+  DietEst.Smale.2004.Subset,
+  DietEst.Smale.2005.Subset,
+  DietEst.Smale.2006.Subset,
+  DietEst.Smale.2007.Subset,
+  DietEst.Smale.2008.Subset,
+  DietEst.Smale.2009.Subset,
+  DietEst.Smale.2010.Subset,
+  DietEst.Smale.2011.Subset,
+  DietEst.Smale.2012.Subset,
+  DietEst.Smale.2013.Subset,
+  DietEst.Smale.2016.Subset,
+  DietEst.Smale.2017.Subset,
+  DietEst.Smale.2018.Subset,
+  DietEst.Smale.2019.Subset,
+  DietEst.Smale.2020.Subset)
+
+
+write.csv(BearDietEst.SmaleSubset.Posterior.Priors, "Results/SmaleSubsetPosteriors_Priors.csv")
+
+```
+
+
+```{r}
+
+BearDietEst.SmaleSubset.Posterior<-read.csv("SmaleubsetPosteriors_Priors.csv")
+
+
+SmaleSubset.posterior.ByYear.fig<-ggplot(data = BearDietEst.SmaleSubset.Posterior)+
+  geom_area(aes(Ants), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[1],
+            color=P[1],
+            linewidth=1.1)+
+  geom_area(aes(Bilberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[10],
+            color=P[10],
+            linewidth=1.1)+
+   geom_area(aes(Crowberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[20],
+            color=P[20],
+            linewidth=1.1)+
+ geom_area(aes(Lingonberry), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[30],
+            color=P[30],
+            linewidth=1.1)+
+   geom_area(aes(Moose), stat = "bin",
+            bins=100,
+            alpha=0.3,
+            fill=P[40],
+            color=P[40],
+            linewidth=1.1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0),
+                     breaks=seq(0,1,0.5))+
+  facet_wrap(~Year)+
+  theme(axis.text = element_text(size=8))+
+  xlab("Posterior distribution of food source proportions\n For single males")
+
+SmaleSubset.posterior.ByYear.fig
+
+ggsave(plot=SmaleSubset.posterior.ByYear.fig,
+       "SmalesSubset.Posterior.AllYears.png",
+       width = 13.5,
+       height = 10,
+       units = "in",
+       dpi = 900)
+
+```
+
+
+
+
+### specific food groups
+
+#### Protein contributions
+
+```{r}
+
+SMsub_clean <- 
+  read.csv(
+    "Results/DfStats_ReproAnnual_SmaleSubsetPriors_Cleaned.csv"
+    )
+Trash1<-subset(SMsub_clean, Source!="Crowberry")
+Trash2 <- subset(Trash1, Source!="Bilberry")
+SMsub.Proteins <- subset(Trash2, Source!="Lingonberry")
+
+write.csv(SMsub.Proteins,
+          "Results/Proteins_SMsub.csv")
+
+SmaleSub.Proteins.ByYear.LineDot.fig<-
+  ggplot(data =SMsub.Proteins,
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI,ymax=UCI,
+                  fill=Source, group=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,
+                group=Source),
+           linewidth=1.2 )+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=4)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete = TRUE)+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0))+
+  ylab("Mean Posterior Diet Proportion\n For single males")
+
+SmaleSub.Proteins.ByYear.LineDot.fig
+
+ggsave(plot=SmaleSub.Proteins.ByYear.LineDot.fig,
+       "Figures/SmaleSub.Proteins.AllYears.LineDot.png",
+       width = 7,
+       height = 6,
+       units = "in",
+       dpi = 900)
+
+```
+
+
+# Conclusions
+It looks like for single males, when we remove the outliers, the sudden switch between Bilberry and lingonberry disappears. Anne was right! Now, the question is...should they be removed or not? 
