@@ -1,0 +1,851 @@
+---
+title: "Carbon_DietSources_Freq"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Introduction
+
+## Background
+
+
+## Research objectives
+
+## Specific hypotheses
+
+# Environment
+
+```{r}
+
+rm(list=ls())
+
+```
+
+## Set Working Directory
+
+```{r}
+
+ setwd("C:/Users/amikk/Documents/Rprojects/BrownBearDietThroughTime")
+
+```
+
+
+## Load Packages
+
+```{r}
+
+library(ggplot2)
+library(lme4)
+library(viridis)
+library(wiqid)
+library(AICcmodavg)
+
+```
+
+
+
+## Graphing theme
+
+```{r}
+
+mytheme <- theme(
+    axis.text = element_text(size = 10,face = "bold"),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_line(color = "grey96"),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(colour = "black",linewidth = 1),
+    axis.ticks = element_line(linewidth = 1),
+    legend.position = "top"
+    )
+theme_set(mytheme)
+
+P <- palette(viridis(40))
+P <- palette(viridis(40))
+
+
+```
+
+
+## Data
+
+### Load Data
+
+```{r}
+
+SI_Diet <- read.csv("Data\\RawBearData_SI_Proteins.csv")
+
+LastYr <- as.numeric(max(SI_Diet$year.represent))
+
+SI_Diet$year.represent <- as.numeric(SI_Diet$year.represent)
+SI_Diet$C13 <- as.numeric(SI_Diet$C13)
+
+C13.suess <- SI_Diet$C13-(+0.022*(LastYr-SI_Diet$year.represent))
+SI_Diet$C13.suess <- C13.suess
+
+SI_Diet$fYEAR <- as.factor(SI_Diet$year.represent)
+is.na(SI_Diet$C13)
+
+SI_Diet <- subset(SI_Diet, C13!="NA")
+SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
+
+SI_Diet <- subset(SI_Diet,age!="NA")
+
+names(SI_Diet)[2] <- "Year"
+names(SI_Diet)[6] <- "Repro"
+names(SI_Diet)[9] <- "Mass"
+
+SI_Diet_Mharv <- subset(SI_Diet, Moose_Harv!="NA")
+SI_Diet_Mharv$Bilberry.Quad <- SI_Diet_Mharv$Bilberry^2
+scratch <- SI_Diet_Mharv$Bilberry+0.000001
+SI_Diet_Mharv$Bilberry.LN <- log(scratch)
+
+SI_Diet_Mharv$Bilberry.Lag.Quad <- SI_Diet_Mharv$Bilberry_Lag^2
+scratch <- SI_Diet_Mharv$Bilberry_Lag+0.000001
+SI_Diet_Mharv$Bilberry.Lag.LN <- log(scratch)
+
+SI_Diet_Mharv$Moose_Harv.Quad <- SI_Diet_Mharv$Moose_Harv^2
+SI_Diet_Mharv$Moose_Obs.Quad <- SI_Diet_Mharv$Moose_Obs^2
+SI_Diet_Mharv$Calves.Quad <- SI_Diet_Mharv$Calves^2
+
+SI_Diet_Mharv$Moose_Harv.Lag.Quad <- SI_Diet_Mharv$Moose_Harv_Lag^2
+SI_Diet_Mharv$Moose_Obs.Lag.Quad <- SI_Diet_Mharv$Moose_Obs_Lag^2
+SI_Diet_Mharv$Calves.Lag.Quad <- SI_Diet_Mharv$Calves_Lag^2
+
+SI_Diet_Mharv$Moose_Harv.LN <- log(SI_Diet_Mharv$Moose_Harv)
+SI_Diet_Mharv$Moose_Obs.LN <- log(SI_Diet_Mharv$Moose_Obs)
+SI_Diet_Mharv$Calves.LN <- log(SI_Diet_Mharv$Calves)
+
+SI_Diet_Mharv$Moose_Harv.Lag.LN <- log(SI_Diet_Mharv$Moose_Harv_Lag)
+SI_Diet_Mharv$Moose_Obs.Lag.LN <- log(SI_Diet_Mharv$Moose_Obs_Lag)
+SI_Diet_Mharv$Calves.Lag.LN <- log(SI_Diet_Mharv$Calves_Lag)
+
+
+```
+
+
+### Standardize cont. variables
+
+```{r}
+
+SI_Diet_Mharv$Zyear <- standardize(SI_Diet_Mharv$Year)
+SI_Diet_Mharv$ZC13 <- standardize(SI_Diet_Mharv$C13.suess)
+SI_Diet_Mharv$Zmass <- standardize(SI_Diet_Mharv$Mass)
+SI_Diet_Mharv$Zprop_ants <- standardize(SI_Diet_Mharv$Prop_Ants)
+SI_Diet_Mharv$Zprop_moose <- standardize(SI_Diet_Mharv$Prop_Moose)
+SI_Diet_Mharv$Zprop_bilb <- standardize(SI_Diet_Mharv$Prop_BilBerry)
+SI_Diet_Mharv$Zharvest_moose <- standardize(SI_Diet_Mharv$Moose_Harv)
+SI_Diet_Mharv$Zobs_moose <- standardize(SI_Diet_Mharv$Moose_Obs)
+SI_Diet_Mharv$Zcalves <- standardize(SI_Diet_Mharv$Calves)
+SI_Diet_Mharv$Zbilb <- standardize(SI_Diet_Mharv$Bilberry)
+SI_Diet_Mharv$Zlingon <- standardize(SI_Diet_Mharv$Lingonberry)
+SI_Diet_Mharv$Zbilb.quad <- standardize(SI_Diet_Mharv$Bilberry.Quad)
+SI_Diet_Mharv$Zbilb.ln <- standardize(SI_Diet_Mharv$Bilberry.LN)
+SI_Diet_Mharv$Zharvest_moose.quad <- standardize(SI_Diet_Mharv$Moose_Harv.Quad)
+SI_Diet_Mharv$Zharvest_moose.ln <- standardize(SI_Diet_Mharv$Moose_Harv.LN)
+SI_Diet_Mharv$Zobs_moose.quad <- standardize(SI_Diet_Mharv$Moose_Obs.Quad)
+SI_Diet_Mharv$Zobs_moose.ln <- standardize(SI_Diet_Mharv$Moose_Obs.LN)
+SI_Diet_Mharv$Zcalves.quad <- standardize(SI_Diet_Mharv$Calves.Quad)
+SI_Diet_Mharv$Zcalves.ln <- standardize(SI_Diet_Mharv$Calves.LN)
+SI_Diet_Mharv$Zage <- standardize(SI_Diet_Mharv$age)
+
+
+SI_Diet_Mharv$Zharvest_moose_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv_Lag)
+SI_Diet_Mharv$Zobs_moose_lag <- 
+  standardize(SI_Diet_Mharv$Moose_Obs_Lag)
+SI_Diet_Mharv$Zcalves_lag <- 
+  standardize(SI_Diet_Mharv$Calves_Lag)
+SI_Diet_Mharv$Zbilb_lag <-
+  standardize(SI_Diet_Mharv$Bilberry_Lag)
+SI_Diet_Mharv$Zlingon_lag <-
+  standardize(SI_Diet_Mharv$Lingonberry_Lag)
+SI_Diet_Mharv$Zbilb.quad_lag <-
+  standardize(SI_Diet_Mharv$Bilberry.Lag.Quad)
+SI_Diet_Mharv$Zbilb.ln_lag <- 
+  standardize(SI_Diet_Mharv$Bilberry.Lag.LN)
+SI_Diet_Mharv$Zharvest_moose.quad_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv.Lag.Quad)
+SI_Diet_Mharv$Zharvest_moose.ln_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv.Lag.LN)
+SI_Diet_Mharv$Zobs_moose.quad_lag <-
+  standardize(SI_Diet_Mharv$Moose_Obs.Lag.Quad)
+SI_Diet_Mharv$Zobs_moose.ln_lag <- 
+  standardize(SI_Diet_Mharv$Moose_Obs.Lag.LN)
+SI_Diet_Mharv$Zcalves.quad_lag <-
+  standardize(SI_Diet_Mharv$Calves.Lag.Quad)
+SI_Diet_Mharv$Zcalves.ln_lag <-
+  standardize(SI_Diet_Mharv$Calves.Lag.LN)
+SI_Diet_Mharv$Zcalves_lag <- 
+  standardize(SI_Diet_Mharv$Calves_Lag)
+
+
+```
+
+
+# Data distributions
+
+
+```{r}
+
+
+ggplot(data = SI_Diet, aes(C13.suess))+
+  geom_histogram(binwidth = sd(SI_Diet$C13.suess))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  xlab(expression(paste(delta^13,"C (\u2030)",sep = "")))
+
+ggplot(data = SI_Diet, aes(C13.suess))+
+  geom_histogram(binwidth = sd(SI_Diet$C13.suess),
+                 aes(fill=fYEAR))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  xlab(expression(paste(delta^13,"C (\u2030)",sep = "")))+
+  scale_fill_viridis(discrete = TRUE,
+                     option="B")
+
+Annual_d13C_plot <- ggplot(data = SI_Diet, aes(Year, C13.suess))+
+  geom_jitter(aes(color=Repro),
+             alpha=0.4,
+             width = 0.1)+
+  geom_boxplot(aes(group=Year),
+               alpha=0.2)+
+  scale_color_viridis(discrete = TRUE, end = 0.95)+
+  scale_y_continuous(expand = c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01))+
+  ylab(expression(paste(delta^13,"C (\u2030)",sep = "")))+
+  labs(color="Reproductive catergory")
+
+
+ggsave(plot = Annual_d13C_plot,
+       "Annual_d13C_plot.png",
+       height = 4.5,width = 6.5,
+       units="in",
+       dpi=700)
+
+
+```
+
+
+
+# Linear regression models
+
+## Model Selection setup
+
+```{r}
+
+CarbonModels <- list()
+
+
+```
+
+
+### Intercept model
+
+```{r}
+
+CarbonModels[[1]] <- IntMod <- lmer(ZC13~1+(1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(IntMod)
+AIcc_Int <- wiqid::AICc(IntMod)
+
+```
+
+
+### Year model
+
+```{r}
+
+CarbonModels[[2]] <-YearMod <- lmer(ZC13~Zyear+(1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(YearMod)
+AIcc_Year <- wiqid::AICc(YearMod)
+
+```
+
+
+### Ants model
+
+```{r}
+
+AntMod <- lmer(ZC13~ Zprop_ants+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(AntMod)
+
+AIcc_Ant <- wiqid::AICc(AntMod)
+
+```
+
+
+### Moose diet model
+
+```{r}
+
+MooseDietMod <- lmer(ZC13~ Zprop_moose+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(MooseDietMod)
+
+AIcc_DietMoose <- wiqid::AICc(MooseDietMod)
+
+```
+
+
+### Moose harvest models
+
+
+```{r}
+
+
+ggplot(data = SI_Diet_Mharv)+
+  geom_line(aes(Year, Moose_Harv),
+            linewidth=1,
+            color=P[20])
+
+ggplot(data = SI_Diet_Mharv)+
+   geom_line(aes(Year, Moose_Harv.Quad),
+            linewidth=1,
+            color=P[23],
+            linetype="dashed")
+
+ggplot(data = SI_Diet_Mharv)+
+  geom_line(aes(Year, Moose_Harv.LN),
+            linewidth=1,
+            color=P[26],
+            linetype="dotdash")
+
+
+```
+
+
+```{r}
+
+MooseHarvMods <- list()
+
+MooseHarvMods[[1]] <-
+  Lin.MooseHarvMod <- 
+  lmer(ZC13~ Zharvest_moose+
+             (1|BearID)+(1|Repro),
+            data = SI_Diet_Mharv) 
+summary(Lin.MooseHarvMod)
+AIcc_HarvMoose.Lin <- wiqid::AICc(Lin.MooseHarvMod)
+
+MooseHarvMods[[2]] <-
+  Log.MooseHarvMod <-
+  lmer(ZC13~ Zharvest_moose.ln+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Mharv) 
+summary(Log.MooseHarvMod)
+AIcc_HarvMoose.Log <- wiqid::AICc(Log.MooseHarvMod)
+
+
+MooseHarvMods[[3]] <-
+  Quad.MooseHarvMod <- 
+  lmer(ZC13~ Zharvest_moose+
+  Zharvest_moose.quad+
+  (1|BearID)+(1|Repro),
+data = SI_Diet_Mharv)
+
+summary(Quad.MooseHarvMod)
+AIcc_HarvMoose.Quad <- wiqid::AICc(Quad.MooseHarvMod)
+
+
+CarbonModels[[3]] <-MooseHarvMod <- Lin.MooseHarvMod
+  
+```
+
+
+### Calf observation models
+
+```{r}
+
+ggplot(data = SI_Diet_Mharv)+
+  geom_line(aes(Year, Calves))+
+  scale_x_continuous(expand = c(0,0))
+
+CalfMods <- list()
+
+CalfMods[[1]] <-Lin.CalfMod <- lmer(ZC13~ Zcalves+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv) 
+summary(Lin.CalfMod)
+AIcc_Calf.Lin <- wiqid::AICc(Lin.CalfMod)
+
+CalfMods[[2]] <-Log.CalfMod <- 
+  lmer(ZC13~ Zcalves.ln+
+      (1|BearID)+(1|Repro),
+      data = SI_Diet_Mharv) 
+summary(Log.CalfMod)
+AIcc_Calf.Log <- wiqid::AICc(Log.CalfMod)
+
+
+CalfMods[[3]] <-
+  Quad.CalfMod <-
+  lmer(ZC13~Zcalves+
+      Zcalves.quad+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Mharv)
+
+summary(Quad.CalfMod)
+AIcc_Calf.Quad <- wiqid::AICc(Quad.CalfMod)
+
+
+
+CarbonModels[[4]] <-
+  CalfMod <-Lin.CalfMod
+
+```
+
+
+
+### Moose observation models
+
+```{r}
+
+MooseObsMods <- list()
+
+MooseObsMods[[1]] <-
+  Lin.MooseObsMod <- 
+  lmer(ZC13~ Zobs_moose+
+  (1|BearID)+(1|Repro),
+data = SI_Diet_Mharv) 
+
+summary(Lin.MooseObsMod)
+AIcc_MooseObs.Lin <- wiqid::AICc(Lin.MooseObsMod)
+
+MooseObsMods[[2]] <-
+  Log.MooseObsMod <- 
+  lmer(ZC13~ Zobs_moose.ln+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Mharv) 
+summary(Log.MooseObsMod)
+AIcc_MooseObs.Log <- wiqid::AICc(Log.MooseObsMod)
+
+
+MooseObsMods[[3]] <-
+  Quad.MooseObsMod <-
+  lmer(ZC13~Zobs_moose+
+      Zobs_moose.quad+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Mharv)
+
+summary(Quad.MooseObsMod)
+AIcc_MooseObs.Quad <- wiqid::AICc(Quad.MooseObsMod)
+
+CarbonModels[[5]] <-
+  MooseObsMod <- 
+  Log.MooseObsMod
+
+```
+
+
+
+### Bilberry models
+
+
+```{r}
+
+ggplot(data = SI_Diet_Mharv)+
+  geom_line(aes(Year, Bilberry),
+            linewidth=1,
+            color=P[5])+
+   geom_line(aes(Year, Bilberry.Quad),
+            linewidth=1,
+            color=P[8],
+            linetype="dashed")+
+  geom_line(aes(Year, Bilberry.LN),
+            linewidth=1,
+            color=P[11],
+            linetype="dotdash")
+
+
+```
+
+
+
+```{r}
+
+BilbModels <- list()
+
+BilbModels[[1]] <-LinBilbMod <- lmer(ZC13~ Zbilb+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+AIcc_Bilb.Lin <- wiqid::AICc(LinBilbMod)
+
+BilbModels[[2]] <-QuadBilbMod <- lmer(ZC13~ Zbilb+Zbilb.quad+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+
+AIcc_Bilb.Quad <- wiqid::AICc(QuadBilbMod)
+
+BilbModels[[3]] <-LogBilbMod <- lmer(ZC13~ Zbilb.ln+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(LogBilbMod)
+
+
+AIcc_Bilb.Log <- wiqid::AICc(LogBilbMod)
+
+
+```
+
+
+
+
+```{r}
+
+CarbonModels[[6]] <-BilbMod <- LogBilbMod
+
+
+```
+
+
+### Lingonberry model
+
+```{r}
+LingTest <- subset(SI_Diet_Mharv, Lingonberry!="")
+
+LT.int <-
+  lmer(ZC13~ 1+
+         (1|BearID)+(1|Repro),
+       data = LingTest)
+LT.AIC.Int <- wiqid::AICc(LT.int)
+
+LT.ling <- 
+  lmer(ZC13~ Zlingon+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+LT.AIC.Ling <- wiqid::AICc(LT.ling)
+
+
+ggplot(data =SI_Diet_Mharv, aes(Year, Lingonberry))+
+  geom_line()
+
+
+
+```
+
+### Age model
+
+```{r}
+
+CarbonModels[[7]] <-AgeMod <- lmer(ZC13~ Zage+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(AgeMod)
+
+AIcc_Age <- wiqid::AICc(AgeMod)
+
+
+
+```
+
+
+## Time lagged models
+
+During one of our discusssions of this analysis, Anne brought up the complexity of the timeline within our system. Initially, I considered the associations between berries and moose on the landscape that are reorted fro the year that hair was grown. However, there may be carry-over affects from diet the previous year, or an abundance of moose carcasses in the fall from the harvest the previous fall and winter, thus the moose value from the year prior to hair growth may be more relevant than moose during the year of moose growth.
+
+Therefore, I created a secondary set of landscape variables that have a 1-year lag, meaning that hair grown in 2006 is associated with moose and berry production from 2005, rather than 2006.
+
+```{r}
+
+SI_Diet_Tlag <- subset(SI_Diet_Mharv, Moose_Harv_Lag!="")
+
+TLModels <- list()
+
+TLModels[[1]] <- TimeLag.Int <-
+  lmer(ZC13~ 1+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Tlag) 
+
+AIcc_TL_int <- wiqid::AICc(TimeLag.Int)
+
+
+```
+
+
+### Lagged Moose harvest
+
+```{r}
+
+MooseHarvMods.Lagged <- list()
+
+MooseHarvMods.Lagged[[1]] <-
+  Lin.MooseHarvMod.Lag <- 
+  lmer(ZC13~ Zharvest_moose_lag+
+             (1|BearID)+(1|Repro),
+            data = SI_Diet_Tlag) 
+summary(Lin.MooseHarvMod.Lag)
+AIcc_HarvMoose.Lin.Lag <- wiqid::AICc(Lin.MooseHarvMod.Lag)
+
+MooseHarvMods.Lagged[[2]] <-
+  Log.MooseHarvMod.Lag <-
+  lmer(ZC13~ Zharvest_moose.ln_lag+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Tlag) 
+summary(Log.MooseHarvMod.Lag)
+AIcc_HarvMoose.Log.Lag <- wiqid::AICc(Log.MooseHarvMod.Lag)
+
+
+MooseHarvMods.Lagged[[3]] <-
+   Quad.MooseHarvMod.Lag  <- 
+  lmer(ZC13~ Zharvest_moose_lag+
+  Zharvest_moose.quad_lag+
+  (1|BearID)+(1|Repro),
+data = SI_Diet_Tlag)
+
+summary(Quad.MooseHarvMod.Lag)
+AIcc_HarvMoose.Quad.Lag <- wiqid::AICc(Quad.MooseHarvMod.Lag)
+
+print(AIcc_HarvMoose.Lin.Lag)
+print(AIcc_HarvMoose.Log.Lag)
+print(AIcc_HarvMoose.Quad.Lag)
+
+summary(Quad.MooseHarvMod.Lag)
+
+TLModels[[2]] <- Log.MooseHarvMod.Lag
+
+
+```
+
+
+### Lagged Moose Calves
+
+```{r}
+
+
+CalfMods.lag <- list()
+
+CalfMods.lag [[1]] <-Lin.CalfMod.Lag <-
+  lmer(ZC13~ Zcalves+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Tlag) 
+summary(Lin.CalfMod.Lag)
+AIcc_Calf.Lin.Lag <- wiqid::AICc(Lin.CalfMod.Lag)
+
+CalfMods.lag [[2]] <-Log.CalfMod.Lag <- 
+  lmer(ZC13~ Zcalves.ln_lag+
+      (1|BearID)+(1|Repro),
+      data = SI_Diet_Mharv) 
+summary(Log.CalfMod.Lag)
+AIcc_Calf.Log.Lag <- wiqid::AICc(Log.CalfMod.Lag)
+
+
+CalfMods.lag[[3]] <-
+  Quad.CalfMod.Lag <-
+  lmer(ZC13~Zcalves+
+      Zcalves.quad+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Tlag)
+
+summary(Quad.CalfMod.Lag)
+AIcc_Calf.Quad.lag <- wiqid::AICc(Quad.CalfMod.Lag)
+
+print(AIcc_Calf.Lin.Lag)
+print(AIcc_Calf.Log.Lag)
+print(AIcc_Calf.Quad.lag)
+
+
+
+TLModels[[3]] <-
+  Lin.CalfMod.Lag 
+
+
+```
+
+
+### Lagged Moose Observation 
+
+```{r}
+
+MooseObsMods.Lag <- list()
+
+MooseObsMods.Lag[[1]] <-
+  Lin.MooseObsMod.Lag <- 
+  lmer(ZC13~ Zobs_moose_lag+
+  (1|BearID)+(1|Repro),
+data = SI_Diet_Tlag) 
+
+summary(Lin.MooseObsMod.Lag)
+AIcc_MooseObs.Lin.Lag <- wiqid::AICc(Lin.MooseObsMod.Lag)
+
+MooseObsMods.Lag[[2]] <-
+  Log.MooseObsMod.Lag <- 
+  lmer(ZC13~ Zobs_moose.ln_lag+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Tlag) 
+summary(Log.MooseObsMod.Lag)
+AIcc_MooseObs.Log.Lag <- wiqid::AICc(Log.MooseObsMod.Lag)
+
+
+MooseObsMods.Lag[[3]] <-
+  Quad.MooseObsMod.Lag <-
+  lmer(ZC13~Zobs_moose_lag+
+      Zobs_moose.quad_lag+
+      (1|BearID)+(1|Repro),
+    data = SI_Diet_Tlag)
+
+summary(Quad.MooseObsMod.Lag)
+AIcc_MooseObs.Quad.Lag <- wiqid::AICc(Quad.MooseObsMod.Lag)
+
+print(AIcc_MooseObs.Lin.Lag)
+print(AIcc_MooseObs.Log.Lag)
+print(AIcc_MooseObs.Quad.Lag)
+summary(Log.MooseObsMod.Lag)
+
+TLModels[[4]] <-  Log.MooseObsMod.Lag
+
+```
+
+
+
+### Lagged Bilberry models
+
+
+```{r}
+
+BilbModels.Lag <- list()
+
+BilbModels.Lag[[1]] <-LinBilbMod.Lag <-
+  lmer(ZC13~ Zbilb_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+AIcc_Bilb.Lin.Lag <- wiqid::AICc(LinBilbMod.Lag)
+
+BilbModels.Lag[[2]] <-QuadBilbMod.Lag <- 
+  lmer(ZC13~ Zbilb_lag+Zbilb.quad_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+AIcc_Bilb.Quad.Lag <- wiqid::AICc(QuadBilbMod.Lag)
+
+
+BilbModels.Lag[[3]] <-
+  LogBilbMod.Lag <-
+  lmer(ZC13~ Zbilb.ln_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+
+AIcc_Bilb.Log.Lag <- wiqid::AICc(LogBilbMod.Lag)
+
+print(AIcc_Bilb.Lin.Lag)
+print(AIcc_Bilb.Log.Lag)
+print(AIcc_Bilb.Quad.Lag)
+
+summary(LinBilbMod.Lag)
+
+
+TLModels[[5]] <-  LinBilbMod.Lag
+
+
+```
+
+
+### Lagged age model
+
+
+```{r}
+
+TLModels[[6]] <-  
+  AgeMod.Lag <- 
+  lmer(ZC13~ Zage+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgeMod.Lag)
+AIcc_AgeLag <- wiqid::AICc(AgeMod.Lag)
+
+
+```
+
+
+
+## Model selection table
+
+### year-year models
+
+```{r}
+
+CarbonModelNames <- c("Intercept",
+                     "Year",
+                     "Moose Harvest",
+                     "Calf Observation",
+                     "Moose Observation",
+                     "Bilberry Index",
+                     "Age")
+
+##Generate and print AICc table
+print(aictab(cand.set = CarbonModels,
+             modnames = CarbonModelNames,
+             sort = TRUE),
+      digits = 4, #round to 4 digits after decimal point
+      LL = TRUE #give log-likelihood 
+      )
+
+write.csv(aictab(cand.set = CarbonModels,
+                 modnames = CarbonModelNames,
+                 sort = TRUE,
+                 second.ord=TRUE),
+          file="Results\\CarbonModels.csv")
+
+
+
+```
+
+
+### time-lagged models
+
+```{r}
+
+TLModelNames <- c("Intercept",
+                  "Lagged Moose Harvest",
+                  "Lagged Calf Observation",
+                  "Lagged Moose Observation",
+                  "Lagged Bilberry Index",
+                  "Age")
+
+##Generate and print AICc table
+print(aictab(cand.set = TLModels,
+             modnames = TLModelNames,
+             sort = TRUE),
+      digits = 4, #round to 4 digits after decimal point
+      LL = TRUE #give log-likelihood 
+      )
+
+write.csv(aictab(cand.set = TLModels,
+                 modnames = TLModelNames,
+                 sort = TRUE,
+                 second.ord=TRUE),
+          file="Results\\Carbon_TimeLagModels.csv")
+
+ggplot(data = SI_Diet_Tlag, aes(age,C13.suess))+
+  geom_jitter(width = 0.2,
+              alpha=0.6,
+              aes(color=Repro))+
+  scale_color_viridis(option="B",
+                      discrete = TRUE,
+                      end=0.8)
+
+```
+
+
+
+# Results
+
