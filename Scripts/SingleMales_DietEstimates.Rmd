@@ -1945,6 +1945,8 @@ ggsave(plot=males.Proteins.ByYear.LineDot.fig,
 
 # Data subset without C outliers
 
+## Annual Model
+
 ### Load Data
 
 
@@ -3387,6 +3389,200 @@ ggsave(plot=SmaleSub.Proteins.ByYear.LineDot.fig,
        dpi = 900)
 
 ```
+
+
+## Age Model
+
+### Load Data
+
+```{r}
+
+ggplot(data=subset(SI_Diet, Repro=="SolitaryM"))+
+  geom_histogram(aes(age), binwidth = 1)
+
+
+```
+
+
+
+
+```{r load data, include=FALSE}
+
+mix.repro.age.Smale.subset <- load_mix_data(
+ filename = "Data/SolitaryMales_NoOutliers_Age.csv",
+ iso_names = c("d13C","d15N"),
+ factors = NULL,
+ fac_random = NULL,
+ fac_nested = NULL,
+ cont_effects = "age"
+)
+
+source <- load_source_data(
+ filename = "Data/bears_sources_MIXSIAR_ConcDep_AnnualYr.csv",
+ source_factors = NULL,
+ conc_dep = TRUE,
+ data_type = "means",
+ mix.repro.age.Smale.subset
+)
+
+disc <- load_discr_data(
+ filename = "Data/bears_discrimination_MixSIAR.csv",
+ mix.repro.age.Smale.subset
+)
+
+
+BearDietPriors_Simmr <- c(7,52,11,26,3)
+BearDietPriors_SoMale_Alpha <-
+  BearDietPriors_Simmr*length(BearDietPriors_Simmr)/sum(BearDietPriors_Simmr)
+
+plot_prior(alpha.prior=BearDietPriors_SoMale_Alpha,
+		   source=source,
+		   plot_save_pdf=TRUE,
+		   plot_save_png=TRUE,
+		   filename="prior_plot_BrownBear_inf")
+
+
+```
+
+
+### Plot data & Pre-run checks
+
+```{r}
+plot_data(
+ filename = "bear.repro.age.SolMalesSubset_isospace_MixSIAR",
+ plot_save_pdf = TRUE,
+ plot_save_png = TRUE,
+ mix.repro.age.Smale.subset,
+ source,
+ disc
+ )
+
+calc_area(source=source,
+          mix=mix.repro.age.Smale.subset,
+          discr=disc)
+
+```
+
+
+
+### Write the JAGS model file
+```{r}
+
+model_filename <- "MixSIAR_Bear.Repro.age_model.txt" # Name of the JAGS model file
+resid_err <- TRUE
+process_err <- TRUE
+write_JAGS_model(model_filename,
+                 resid_err,
+                 process_err,
+                 mix.repro.age.Smale.subset,
+                 source)
+
+```
+
+
+
+### Run Smale prelim test model
+
+12.03.2024 took 1.5 minutes
+
+```{r, include=FALSE}
+
+start.time <- Sys.time()
+mix.repro.age.Smale.Subset.test <- run_model(
+ run = "test",
+ mix.repro.age.Smale.subset,
+ source,
+ disc,
+ model_filename,
+ alpha.prior = BearDietPriors_SoMale_Alpha
+ )
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+```
+
+### Run extreme Smale model on extreme settings
+
+
+15.03.2024- began running with informative priors and took 3.4 days
+
+```{r}
+
+start.time <- Sys.time()
+mix.repro.age.Smale.subset.extreme <- run_model(
+  run ="extreme",
+  mix.repro.age.Smale.subset,
+  source,
+  disc,
+  model_filename,
+  alpha.prior = BearDietPriors_SoMale_Alpha
+)
+
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+
+BearDiet.repro.age.Smale.subset <- mix.repro.age.Smale.subset.extreme
+#save.image("BearDietEstimates_ReproAnnual_SmalePriors.RData")
+
+########################################
+output_options_SmaleAgeSubsetPriors <- list(
+  summary_save = TRUE,                 
+  summary_name = "summary_statistics_SmaleAgeSubsetPriors", 
+  sup_post = TRUE,                    
+  plot_post_save_pdf = FALSE,           
+  plot_post_name = "posterior_density_SmaleAgeSubsetPriors",
+  sup_pairs = TRUE,             
+  plot_pairs_save_pdf = TRUE,    
+  plot_pairs_name = "pairs_plot_SmaleAgeSubsetPriors",
+  sup_xy = TRUE,           
+  plot_xy_save_pdf = TRUE,
+  plot_xy_name = "xy_plot_SmaleAgeSubsetPriors",
+  gelman = TRUE,
+  heidel = FALSE,  
+  geweke = TRUE,   
+  diag_save = TRUE,
+  diag_name = "diagnostics_SmaleAgeSubsetPriors",
+  indiv_effect = FALSE,       
+  plot_post_save_png = FALSE, 
+  plot_pairs_save_png = FALSE,
+  plot_xy_save_png = FALSE,
+  diag_save_ggmcmc = FALSE,
+  return_obj = TRUE)
+
+
+df.stats_repro.age.SmaleSubsetPriors <- output_stats(
+  BearDiet.repro.age.Smale.subset,
+  mix.repro.age.Smale.subset,
+  source,
+  output_options_SmaleAgeSubsetPriors)
+
+write.csv(df.stats_repro.age.SmaleSubsetPriors,
+          "Results/DfStats_ReproAge_SmaleSubsetPriors.csv")
+
+row.names(df.stats_repro.age.SmaleSubsetPriors)
+
+
+```
+
+
+
+## Diagnostics
+
+```{r}
+
+diag.repro.age.Smale.subset <- output_diagnostics(BearDiet.repro.age.Smale.subset,                                    mix.repro.age.Smale.subset,
+                         source,
+                         output_options_SmaleAgeSubsetPriors)
+names(diag.repro.age.Smale.subset)
+head(diag.repro.age.Smale.subset)
+
+```
+
 
 
 # Conclusions
