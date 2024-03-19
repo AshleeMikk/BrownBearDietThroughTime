@@ -3362,7 +3362,8 @@ write.csv(BearDietEst.SfemsSubset.Posterior.Priors, "SfemSubsetPosteriors_Priors
 
 ```{r}
 
-BearDietEst.SfemsSubset.Posterior<-read.csv("SfemSubsetPosteriors_Priors.csv")
+BearDietEst.SfemsSubset.Posterior<-
+  read.csv("Results/SfemSubsetPosteriors_Priors.csv")
 
 
 SfemsSubset.posterior.ByYear.fig<-ggplot(data = BearDietEst.SfemsSubset.Posterior)+
@@ -3416,74 +3417,15 @@ ggsave(plot=Sfems.posterior.ByYear.fig,
 
 
 
-Same figure as above, but using posterior estimates modeled with inforamtive priors
-
-```{r}
-
-
-BearDietEst.Sfems.Posterior.Priors<-read.csv("SfemPosteriors_Priors.csv")
-
-Sfems.posterior.ByYear.fig.Priors<-
-  ggplot(data = BearDietEst.Sfems.Posterior.Priors)+
-  geom_area(aes(Ants), stat = "bin",
-            bins=100,
-            alpha=0.3,
-            fill=P[1],
-            color=P[1],
-            linewidth=1.1)+
-  geom_area(aes(Bilberry), stat = "bin",
-            bins=100,
-            alpha=0.3,
-            fill=P[10],
-            color=P[10],
-            linewidth=1.1)+
-   geom_area(aes(Crowberry), stat = "bin",
-            bins=100,
-            alpha=0.3,
-            fill=P[20],
-            color=P[20],
-            linewidth=1.1)+
- geom_area(aes(Lingonberry), stat = "bin",
-            bins=100,
-            alpha=0.3,
-            fill=P[30],
-            color=P[30],
-            linewidth=1.1)+
-   geom_area(aes(Moose), stat = "bin",
-            bins=100,
-            alpha=0.3,
-            fill=P[40],
-            color=P[40],
-            linewidth=1.1)+
-  scale_y_continuous(expand = c(0,0))+
-  scale_x_continuous(expand = c(0,0),
-                     breaks=seq(0,1,0.5))+
-  facet_wrap(~Year)+
-  theme(axis.text = element_text(size=8))+
-  xlab("Posterior distribution of food source proportions")
-
-Sfems.posterior.ByYear.fig.Priors
-
-ggsave(plot=Sfems.posterior.ByYear.fig.Priors,
-       "Sfemss.Posterior.AllYears.Priors.png",
-       width = 13.5,
-       height = 10,
-       units = "in",
-       dpi = 900)
-
-
-
-```
-
-
 ## Graphical output
 
 ### All sources across all years
 
 ```{r}
-BearDietEst.Sfems.PosteriorDietEst.Sfems.2019.Subset <- read.csv("SfemSubsetPosteriors.csv")
+BearDietEst.Sfems.PosteriorDietEst.Sfems.Subset <- read.csv("Results/SfemSubsetPosteriors_Priors.csv")
 
-SFsub_Post_Full <- ggplot(data = BearDietEst.Sfems.Posterior)+
+SFsub_Post_Full <- 
+  ggplot(data = BearDietEst.Sfems.PosteriorDietEst.Sfems.Subset)+
   geom_area(aes(Ants), stat = "bin",
             bins=100,
             alpha=0.3,
@@ -3538,14 +3480,14 @@ SFsub_Post_Full <- ggplot(data = BearDietEst.Sfems.Posterior)+
             size=4,
             x=0.105, y= 32000,
             color=P[40])+
-  xlab("Dietary Proportion")
+  xlab("Estimated dietary Proportion\nSolitary females")
 
 
 SFsub_Post_Full
 
 ggsave(plot = SFsub_Post_Full,
        "SFsub_Post_Full.png",
-       width = 5, height = 4,
+       width = 6.5, height = 5,
        units = "in",
        dpi = 700)
 
@@ -3617,14 +3559,14 @@ SfemsSubset.posterior.ByYear.LineDot.fig<-ggplot(data = AnnualSfemSubsetBearEst,
   scale_y_continuous(expand = c(0,0),
                      limits = c(0,1),
                      breaks = seq(0,1,0.25))+
-  ylab("Mean posterior estimate of dietary proportions\nSingle females")
+  ylab("Mean posterior estimate of dietary proportions\nSolitary females")
 
 SfemsSubset.posterior.ByYear.LineDot.fig
 
 ggsave(plot=SfemsSubset.posterior.ByYear.LineDot.fig,
        "SfemsSubset_Posterior_AllYears_LineDot.png",
-       width = 11.5,
-       height = 9,
+       width = 6.5,
+       height = 5,
        units = "in",
        dpi = 900)
 
@@ -3651,7 +3593,7 @@ SfemsSub.Proteins.ByYear.LineDot.fig<-
   ggplot(data =SFsub.Proteins,
        aes(Year,Mean))+
   geom_ribbon(aes(ymin=LCI,ymax=UCI,
-                  fill=Source, group=Source),
+                  fill=Source, group=Source, color=Source),
               alpha=0.1)+
   geom_line(aes(color=Source,
                 group=Source),
@@ -3671,8 +3613,8 @@ SfemsSub.Proteins.ByYear.LineDot.fig
 
 ggsave(plot=SfemsSub.Proteins.ByYear.LineDot.fig,
        "SfemsSub.Proteins.AllYears.LineDot.png",
-       width = 7,
-       height = 6,
+       width = 6.5,
+       height = 5,
        units = "in",
        dpi = 900)
 
