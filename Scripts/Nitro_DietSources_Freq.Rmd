@@ -65,6 +65,10 @@ library(lme4)
 library(viridis)
 library(wiqid)
 library(AICcmodavg)
+library(ggExtra)
+library(ggiraphExtra)
+library(ggeffects)
+library(gridExtra)
 
 ```
 
@@ -115,10 +119,12 @@ is.na(SI_Diet$N15)
 SI_Diet <- subset(SI_Diet, N15!="NA")
 SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
 SI_Diet <- subset(SI_Diet,age!="NA")
+SI_Diet <- subset(SI_Diet, age<20)
 
 names(SI_Diet)[2] <- "Year"
 names(SI_Diet)[6] <- "Repro"
 names(SI_Diet)[9] <- "Mass"
+
 
 SI_Diet_Mharv <- subset(SI_Diet, Moose_Harv!="NA")
 SI_Diet_Mharv$Bilberry.Quad <- SI_Diet_Mharv$Bilberry^2
@@ -393,15 +399,13 @@ summary(Quad.MooseHarvMod)
 AIcc_HarvMoose.Quad <- wiqid::AICc(Quad.MooseHarvMod)
 
 
+
 NitrogenModels[[3]] <-MooseHarvMod <- 
   lmer(ZN15~ Zharvest_moose+
       (1|BearID)+(1|Repro),
       data = SI_Diet_Mharv)
 
-summary(MooseHarvMod)
 
-rsq(x=SI_Diet_Mharv$Moose_Harv, y=SI_Diet_Mharv$N15)
-AIcc_HarvMoose <- wiqid::AICc(MooseHarvMod)
 
 ```
 
@@ -447,8 +451,6 @@ NitrogenModels[[4]] <-
   lmer(ZN15~ Zcalves+
       (1|BearID)+(1|Repro),
     data = SI_Diet_Mharv)
-
-summary(CalfMod)
 
 rsq(x=SI_Diet_Mharv$Calves, y=SI_Diet_Mharv$N15)
 AIcc_Calf <- wiqid::AICc(CalfMod)
@@ -623,6 +625,27 @@ summary(AgeMod)
 
 
 AIcc_Age <- wiqid::AICc(AgeMod)
+
+
+NitrogenModels[[8]] <-AgeSexMod <- lmer(ZN15~ Zage+sex+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(AgeSexMod)
+
+
+AIcc_AgeSex <- wiqid::AICc(AgeSexMod)
+
+
+
+NitrogenModels[[9]] <-AgexSexMod <- lmer(ZN15~ Zage+sex+Zage*sex+
+                  (1|BearID)+(1|Repro),
+                data = SI_Diet_Mharv)
+
+summary(AgexSexMod)
+
+
+AIcc_AgexSex <- wiqid::AICc(AgexSexMod)
 
 
 
@@ -853,8 +876,61 @@ summary(AgeMod.Lag)
 AIcc_AgeLag <- wiqid::AICc(AgeMod.Lag)
 
 
+TLModels[[7]] <-  
+  AgeSexMod.Lag <- 
+  lmer(ZN15~ Zage+sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgeSexMod.Lag)
+AIcc_AgeSexLag <- wiqid::AICc(AgeSexMod.Lag)
+
+
+
+TLModels[[8]] <-  
+  AgexSexMod.Lag <- 
+  lmer(ZN15~ Zage+sex+Zage*sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexMod.Lag)
+AIcc_AgexSexLag <- wiqid::AICc(AgexSexMod.Lag)
+
+
 ```
 
+
+### Lagged Age, sex, and landscape models
+
+```{r}
+
+TLModels[[9]] <-  
+  AgexSexBilbMod.Lag <- 
+  lmer(ZN15~ Zage+sex+Zage*sex+Zbilb_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexBilbMod.Lag)
+AIcc_AgexSexBilbLag <- wiqid::AICc(AgexSexBilbMod.Lag)
+
+
+
+TLModels[[10]] <-  
+  AgexSexBilMharvbMod.Lag <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zbilb_lag+
+         Zharvest_moose_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexBilMharvbMod.Lag)
+AIcc_AgexSexBilbMharvLag <- wiqid::AICc(AgexSexBilMharvbMod.Lag)
+
+
+
+```
 
 
 
@@ -870,7 +946,9 @@ NitroModelNames <- c("Intercept",
                      "Calf Observation",
                      "Moose Observation",
                      "Bilberry Index",
-                     "Age")
+                     "Age",
+                     "Age plus sex",
+                     "Age times sex")
 
 ##Generate and print AICc table
 print(aictab(cand.set = NitrogenModels,
@@ -900,7 +978,11 @@ TLModelNames <- c("Intercept",
                   "Lagged Calf Observation",
                   "Lagged Moose Observation",
                   "Lagged Bilberry Index",
-                  "Age")
+                  "Age",
+                  "age plus sex",
+                  "Age times sex",
+                  "Age times sex, Lbilberry",
+                  "Age times sex, Lbilberry, LmooseHarv")
 
 ##Generate and print AICc table
 print(aictab(cand.set = TLModels,
@@ -931,60 +1013,90 @@ OK. So when we associate the landscape variables available the same year hair wa
 
 But when we use a time lag and look at resource availability from the year prior to hair growth, we have strong support for a negative relationship between $\delta^{15}N$ and both bilberry index and moose harvest data.
 
-# Top model visualizations
+# Results
 
-## Time-lagged Bilberry
+## Top model visualizations
+
+### Age and sex
 
 The time lagged model that accounted for bilberry production had the most support in the data for explaining observed variation in brown bear hair $\delta^{15}N$ values. 
 There was a strong negative, linear correlation between bilberry and $\delta^{15}N$ values.
 
 The regression was performed on z-transformed variables, so I need to use the model output to predict $\delta^{15}N$ values, then back-transform my variables to the real scale.
 
+
+```{r}
+
+ggplot(data = SI_Diet_Mharv, aes(age,N15))+
+  geom_jitter(aes(color=Repro),
+              width = 0.1,
+              alpha=0.5)+
+  scale_color_viridis(discrete = TRUE)
+
+
+```
+
+
+
 ```{r}
 
 # Get the beta estimates from our top model
-summary(LinBilbMod.Lag)
+summary(AgexSexMod)
 
 #create a function from the model output that describes the relationship
-BearNit_BilbRelationship <- function(x){
-  LinBilbMod.Lag@beta[1]+ (LinBilbMod.Lag@beta[2]*x)
+FemBearNit_AgeRelationship <- function(x){
+  AgexSexMod@beta[1] + (AgexSexMod@beta[2]*x)
 }
 
-#Create a continuous dummy variable of bilberry values, from our min observed to our max observed (z-standardized of course)
+MaleBearNit_AgeRelationship <- function(x){
+  (AgexSexMod@beta[1]+AgexSexMod@beta[3]) +
+    (AgexSexMod@beta[2]*x)+ (AgexSexMod@beta[4]*x)
+}
 
-dummy.bilberry <- seq(min(SI_Diet_Tlag$Zbilb_lag),
-                      max(SI_Diet_Tlag$Zbilb_lag),
-                      length=nrow(SI_Diet_Tlag))
+#Create a continuous dummy variable of age values, from our min observed to our max observed (z-standardized of course)
+
+
+dummy.age <- seq(min(SI_Diet_Mharv$Zage),
+                      max(SI_Diet_Mharv$Zage),
+                      length=nrow(SI_Diet_Mharv))
 
 #Use that dummy variable and the model output to predict $\delta^{15}N$ values for the range of bilberry values
 
-PredictedN.bilberry <- BearNit_BilbRelationship(dummy.bilberry)
+PredictedFemN.age <- FemBearNit_AgeRelationship(dummy.age)
+PredictedMaleN.age <- MaleBearNit_AgeRelationship(dummy.age)
 
 # Quick, ugly plot
-plot(dummy.bilberry,PredictedN.bilberry)
+plot(dummy.age,PredictedFemN.age)
+plot(dummy.age,PredictedMaleN.age)
 
 # Back-transform these to the real scale
 # Z-transformation = (i-mu(i))/sd(i)
 # I typically denote values back-transformed from the z-scale with an A (opposite of z)
 # A-transformation= (i*sd(i))+mu(i)
 
-A.dummy.bilberry <- 
-  (dummy.bilberry*sd(SI_Diet_Tlag$Bilberry_Lag))+
-  mean(SI_Diet_Tlag$Bilberry_Lag)
+A.dummy.age <- 
+  (dummy.age*sd(SI_Diet_Mharv$age))+
+  mean(SI_Diet_Mharv$age)
 
-A.predictedN.bilberry <- 
-  (PredictedN.bilberry*sd(SI_Diet_Tlag$N15))+
-  mean(SI_Diet_Tlag$N15)
+A.predictedFemN.age <- 
+  (PredictedFemN.age*sd(SI_Diet_Mharv$N15))+
+  mean(SI_Diet_Mharv$N15)
 
-TopModel.DF <- data.frame(A.dummy.bilberry,
-                          A.predictedN.bilberry,
-                          SI_Diet_Tlag$Bilberry_Lag,
-                          SI_Diet_Tlag$N15,
-                          SI_Diet_Tlag$Repro)
+A.predictedMaleN.age <- 
+  (PredictedMaleN.age*sd(SI_Diet_Mharv$N15))+
+  mean(SI_Diet_Mharv$N15)
 
-names(TopModel.DF)[3] <- "Obs.Bilberry.Lag"
-names(TopModel.DF)[4] <- "Obs.15N"
-names(TopModel.DF)[5] <- "Obs.Repro"
+
+TopModel.DF <- data.frame(A.dummy.age,
+                          A.predictedFemN.age,
+                          A.predictedMaleN.age,
+                          SI_Diet_Mharv$age,
+                          SI_Diet_Mharv$N15,
+                          SI_Diet_Mharv$Repro)
+
+names(TopModel.DF)[4] <- "Obs.Age"
+names(TopModel.DF)[5] <- "Obs.15N"
+names(TopModel.DF)[6] <- "Obs.Repro"
 
 
 
@@ -996,29 +1108,94 @@ names(TopModel.DF)[5] <- "Obs.Repro"
 ```{r}
 
 
-Lagged.Bilb.Plot <- 
-  ggplot(data = TopModel.DF, aes(A.dummy.bilberry, A.predictedN.bilberry))+
-  geom_jitter(aes(Obs.Bilberry.Lag,Obs.15N, color=Obs.Repro),
-              width = 0.01,
+Nitro.AgexSex.Plot <- 
+  ggplot(data = TopModel.DF)+
+  geom_jitter(aes(Obs.Age,Obs.15N, color=Obs.Repro),
+              width = 0.1,
               alpha=0.5,
               size=1)+
-  geom_line(linewidth=1.1)+
+  geom_line(aes(A.dummy.age, A.predictedFemN.age),
+            linewidth=1.1,
+            lty="dashed",
+            color=P[15])+
+  geom_line(aes(A.dummy.age, A.predictedMaleN.age),
+            linewidth=1.1,
+            lty="dotdash",
+            color=P[30])+
   ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))+
-  xlab("Bilberry Index")+
+  xlab("Bear age")+
   scale_color_manual(values = c(P[10],
-                                P[20],
-                                P[30]))+
+                                P[30],
+                                P[20]))+
   labs(color="Reproductive status")+
   scale_y_continuous(expand=c(0.01,0.01))+
   scale_x_continuous(expand = c(0.01,0.01))
 
-ggsave(plot = Lagged.Bilb.Plot,
-       "Figures/TopNModel_Bilberry.png",
+Nitro.AgexSex.Plot
+
+ggsave(plot = Nitro.AgexSex.Plot,
+       "Figures/TopNModel_AgexSex.png",
        height = 4, width = 5,
        units = "in",
        dpi = 700)
 
 
+
+
+```
+
+
+
+
+# Same as above with CIs
+
+```{r}
+
+summary(AgexSexMod)
+AgexSex.df <- ggpredict(AgexSexMod,
+                        terms = c("Zage","sex[F,M]"))
+AgexSex.df$Age.og <- (AgexSex.df$x*sd(SI_Diet_Mharv$age))+
+  mean(SI_Diet_Mharv$age)
+
+AgexSex.df$Nitro.og <- (AgexSex.df$predicted*sd(SI_Diet_Mharv$N15))+
+  mean(SI_Diet_Mharv$N15)
+
+AgexSex.df$LCI <- (AgexSex.df$conf.low*sd(SI_Diet_Mharv$N15))+
+  mean(SI_Diet_Mharv$N15)
+AgexSex.df$UCI <- (AgexSex.df$conf.high*sd(SI_Diet_Mharv$N15))+
+  mean(SI_Diet_Mharv$N15)
+
+
+```
+
+
+
+```{r}
+
+AgexSex.Plot <- ggplot(data = AgexSex.df, aes(Age.og,Nitro.og))+
+  geom_jitter(data = SI_Diet_Mharv, aes(age,N15, color=sex, pch=sex),
+              size=2,
+              alpha=0.4)+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI, group=group, fill=group),
+              alpha=0.15)+
+  geom_line(aes(group=group,
+                color=group),
+            linewidth=0.9)+
+  scale_y_continuous(expand = c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01))+
+  scale_color_manual(values = c(P[5],P[25]))+
+  scale_fill_manual(values = c(P[5],P[25]))+
+  ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))+
+  xlab("Bear age")+
+  labs(fill="sex",color="sex", pch="sex")
+
+AgexSex.Plot
+
+ggsave(plot = AgexSex.Plot,
+       "Figures/AgexSex_plot.png",
+       width = 6.5, height = 5,
+       units = "in",
+       dpi = 800)
 
 
 ```
