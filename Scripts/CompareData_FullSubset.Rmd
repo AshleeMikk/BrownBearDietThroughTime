@@ -1,0 +1,465 @@
+---
+title: "Compare full dataset to subset"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Background
+
+This R markdown is part of the analysis of brown bear diet through time for the third manuscript of my PhD. Even though we have an amazing, long-term dataset of bear data, we only have a berry index that goes back to 2006. So when I used linear regression models to explain the variation in $\delta^{15}N$ and $\delta^{13}C$ values, I had to use a small subset of the data. This even varies between the signatures, because $\delta^{15}N$ was best explained by landscape variables with a time-lag, while $\delta^{13}C$ values were best explained with direct year-year relationships. This means that in $\delta^{15}N$, Bilberry production in 2010 coincided with a lower estimated proportion of bilberry in bear diets in 2010, followed by a change in $\delta^{15}N$ values in 2011 (a one-year lag). Meanwhile, change in  $\delta^{13}C$ values occured in 2010 associated with landscape variables, rather than 2011. 
+
+This is likely related to different physiological routes for carbon and nitrogen. Carbon-based molecules may be immidiatly used for tissue growth (such as hair), while nitrogen-based molecules may be routed to lean mass production in the year they are consumed, and then used for other tissue production (such as hair) the follwoing year when lean mass is broken down.
+
+If I want to make broad generalizations about landscape influences on diet in the bear population, I need to show that models and results apply to the larger dataset, and not just my subset.
+
+*The goal of this Rmarkdown is to illustrate that the composition of subset data is similar to the full data set and therefore, my results and inferences regarding the subset data are also applicable to the larger dataset.*
+
+# Environment
+
+```{r}
+
+rm(list=ls())
+
+```
+
+## Set Working Directory
+
+```{r}
+
+ setwd("C:/Users/amikk/Documents/Rprojects/BrownBearDietThroughTime")
+
+```
+
+
+## Load Packages
+
+```{r}
+
+library(ggplot2)
+library(lme4)
+library(viridis)
+library(wiqid)
+library(AICcmodavg)
+library(ggExtra)
+library(ggiraphExtra)
+library(ggeffects)
+library(gridExtra)
+library(rphylopic)
+
+
+```
+
+
+
+## Graphing theme
+
+```{r}
+
+moose.img <- pick_phylopic(name = "Alces alces")
+bilb.img <- pick_phylopic(name = "Vaccinium")
+
+mytheme <- theme(
+    axis.text = element_text(size = 10,face = "bold"),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_line(color = "grey96"),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(colour = "black",linewidth = 1),
+    axis.ticks = element_line(linewidth = 1),
+    legend.position = "top"
+    )
+theme_set(mytheme)
+
+P <- palette(viridis(40))
+P <- palette(viridis(40))
+
+
+```
+
+
+## Functions
+```{r}
+
+std <- function(x) sd(x)/sqrt(length(x))
+
+```
+
+
+## Data
+
+### Load Data
+
+```{r}
+
+SI_Diet <- read.csv("Data\\RawBearData_SI_Proteins.csv")
+
+LastYr <- as.numeric(max(SI_Diet$year.represent))
+
+SI_Diet$year.represent <- as.numeric(SI_Diet$year.represent)
+SI_Diet$C13 <- as.numeric(SI_Diet$C13)
+
+C13.suess <- SI_Diet$C13-(+0.022*(LastYr-SI_Diet$year.represent))
+SI_Diet$C13.suess <- C13.suess
+
+SI_Diet$fYEAR <- as.factor(SI_Diet$year.represent)
+is.na(SI_Diet$N15)
+
+SI_Diet <- subset(SI_Diet, N15!="NA")
+SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
+SI_Diet <- subset(SI_Diet,age!="NA")
+SI_Diet <- subset(SI_Diet, age<20)
+
+names(SI_Diet)[2] <- "Year"
+names(SI_Diet)[6] <- "Repro"
+names(SI_Diet)[9] <- "Mass"
+SI_Diet$fAGE <- as.factor(SI_Diet$age)
+
+Bears.Ind <- as.factor(SI_Diet$BearID)
+print(Nbear <- nlevels(Bears.Ind))
+
+
+SI_Diet_Mharv <- subset(SI_Diet, Moose_Harv!="NA")
+SI_Diet_Mharv$Bilberry.Quad <- SI_Diet_Mharv$Bilberry^2
+scratch <- SI_Diet_Mharv$Bilberry+0.000001
+SI_Diet_Mharv$Bilberry.LN <- log(scratch)
+
+SI_Diet_Mharv$Bilberry.Lag.Quad <- SI_Diet_Mharv$Bilberry_Lag^2
+scratch <- SI_Diet_Mharv$Bilberry_Lag+0.000001
+SI_Diet_Mharv$Bilberry.Lag.LN <- log(scratch)
+
+SI_Diet_Mharv$Moose_Harv.Quad <- SI_Diet_Mharv$Moose_Harv^2
+SI_Diet_Mharv$Moose_Obs.Quad <- SI_Diet_Mharv$Moose_Obs^2
+SI_Diet_Mharv$Calves.Quad <- SI_Diet_Mharv$Calves^2
+
+SI_Diet_Mharv$Moose_Harv.Lag.Quad <- SI_Diet_Mharv$Moose_Harv_Lag^2
+SI_Diet_Mharv$Moose_Obs.Lag.Quad <- SI_Diet_Mharv$Moose_Obs_Lag^2
+SI_Diet_Mharv$Calves.Lag.Quad <- SI_Diet_Mharv$Calves_Lag^2
+
+SI_Diet_Mharv$Moose_Harv.LN <- log(SI_Diet_Mharv$Moose_Harv)
+SI_Diet_Mharv$Moose_Obs.LN <- log(SI_Diet_Mharv$Moose_Obs)
+SI_Diet_Mharv$Calves.LN <- log(SI_Diet_Mharv$Calves)
+
+SI_Diet_Mharv$Moose_Harv.Lag.LN <- log(SI_Diet_Mharv$Moose_Harv_Lag)
+SI_Diet_Mharv$Moose_Obs.Lag.LN <- log(SI_Diet_Mharv$Moose_Obs_Lag)
+SI_Diet_Mharv$Calves.Lag.LN <- log(SI_Diet_Mharv$Calves_Lag)
+
+
+```
+
+
+### Standardize cont. variables
+
+```{r}
+
+SI_Diet_Mharv$Zyear <- standardize(SI_Diet_Mharv$Year)
+SI_Diet_Mharv$ZN15 <- standardize(SI_Diet_Mharv$N15)
+SI_Diet_Mharv$Zmass <- standardize(SI_Diet_Mharv$Mass)
+SI_Diet_Mharv$Zprop_ants <- standardize(SI_Diet_Mharv$Prop_Ants)
+SI_Diet_Mharv$Zprop_moose <- standardize(SI_Diet_Mharv$Prop_Moose)
+SI_Diet_Mharv$Zprop_bilb <- standardize(SI_Diet_Mharv$Prop_BilBerry)
+SI_Diet_Mharv$Zharvest_moose <- standardize(SI_Diet_Mharv$Moose_Harv)
+SI_Diet_Mharv$Zobs_moose <- standardize(SI_Diet_Mharv$Moose_Obs)
+SI_Diet_Mharv$Zcalves <- standardize(SI_Diet_Mharv$Calves)
+SI_Diet_Mharv$Zbilb <- standardize(SI_Diet_Mharv$Bilberry)
+SI_Diet_Mharv$Zlingon <- standardize(SI_Diet_Mharv$Lingonberry)
+SI_Diet_Mharv$Zbilb.quad <- standardize(SI_Diet_Mharv$Bilberry.Quad)
+SI_Diet_Mharv$Zbilb.ln <- standardize(SI_Diet_Mharv$Bilberry.LN)
+SI_Diet_Mharv$Zharvest_moose.quad <- standardize(SI_Diet_Mharv$Moose_Harv.Quad)
+SI_Diet_Mharv$Zharvest_moose.ln <- standardize(SI_Diet_Mharv$Moose_Harv.LN)
+SI_Diet_Mharv$Zobs_moose.quad <- standardize(SI_Diet_Mharv$Moose_Obs.Quad)
+SI_Diet_Mharv$Zobs_moose.ln <- standardize(SI_Diet_Mharv$Moose_Obs.LN)
+SI_Diet_Mharv$Zcalves.quad <- standardize(SI_Diet_Mharv$Calves.Quad)
+SI_Diet_Mharv$Zcalves.ln <- standardize(SI_Diet_Mharv$Calves.LN)
+SI_Diet_Mharv$Zage <- standardize(SI_Diet_Mharv$age)
+
+
+SI_Diet_Mharv$Zharvest_moose_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv_Lag)
+SI_Diet_Mharv$Zobs_moose_lag <- 
+  standardize(SI_Diet_Mharv$Moose_Obs_Lag)
+SI_Diet_Mharv$Zcalves_lag <- 
+  standardize(SI_Diet_Mharv$Calves_Lag)
+SI_Diet_Mharv$Zbilb_lag <-
+  standardize(SI_Diet_Mharv$Bilberry_Lag)
+SI_Diet_Mharv$Zlingon_lag <-
+  standardize(SI_Diet_Mharv$Lingonberry_Lag)
+SI_Diet_Mharv$Zbilb.quad_lag <-
+  standardize(SI_Diet_Mharv$Bilberry.Lag.Quad)
+SI_Diet_Mharv$Zbilb.ln_lag <- 
+  standardize(SI_Diet_Mharv$Bilberry.Lag.LN)
+SI_Diet_Mharv$Zharvest_moose.quad_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv.Lag.Quad)
+SI_Diet_Mharv$Zharvest_moose.ln_lag <-
+  standardize(SI_Diet_Mharv$Moose_Harv.Lag.LN)
+SI_Diet_Mharv$Zobs_moose.quad_lag <-
+  standardize(SI_Diet_Mharv$Moose_Obs.Lag.Quad)
+SI_Diet_Mharv$Zobs_moose.ln_lag <- 
+  standardize(SI_Diet_Mharv$Moose_Obs.Lag.LN)
+SI_Diet_Mharv$Zcalves.quad_lag <-
+  standardize(SI_Diet_Mharv$Calves.Lag.Quad)
+SI_Diet_Mharv$Zcalves.ln_lag <-
+  standardize(SI_Diet_Mharv$Calves.Lag.LN)
+SI_Diet_Mharv$Zcalves_lag <- 
+  standardize(SI_Diet_Mharv$Calves_Lag)
+
+
+```
+
+
+```{r}
+
+SI_Diet_Tlag <- subset(SI_Diet_Mharv, Moose_Harv_Lag!="")
+
+```
+
+
+
+# Data distributions
+
+To begin, let's look at the distribution and compositions of the three data sets to see if there are any glaring irregularities.
+
+Important factors to look at will be number of samples, and how those are distributed by year, sex, and reproductive class
+
+## Basic distributions
+
+```{r}
+# Full data set (N=669)
+ggplot(data = SI_Diet, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                 fill=P[8])+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+# Subset 2006-2020 based on berry index (N=410;61%)
+ggplot(data = SI_Diet_Mharv, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  fill=P[11])+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+# Subset 2007-2020 based landscape variables with time lag (N= 383; 57%)
+ggplot(data = SI_Diet_Tlag, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  fill=P[14])+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+
+ 
+```
+
+
+
+## Sex distributions
+
+```{r}
+# Full data set (N=669)
+ggplot(data = SI_Diet, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                 aes(fill=sex))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_manual(values = c(P[5],P[25]))
+
+# Subset 2006-2020 based on berry index (N=410;61%)
+ggplot(data = SI_Diet_Mharv, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=sex))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_manual(values = c(P[5],P[25]))
+
+# Subset 2007-2020 based landscape variables with time lag (N= 383; 57%)
+ggplot(data = SI_Diet_Tlag, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=sex))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_manual(values = c(P[5],P[25]))
+
+ 
+```
+
+## Repro categories
+
+```{r}
+# Full data set (N=669)
+ggplot(data = SI_Diet, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                 aes(fill=Repro))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2006-2020 based on berry index (N=410;61%)
+ggplot(data = SI_Diet_Mharv, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=Repro))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2007-2020 based landscape variables with time lag (N= 383; 57%)
+ggplot(data = SI_Diet_Tlag, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=Repro))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+ scale_fill_viridis(discrete = TRUE)
+
+mean(SI_Diet$N15)
+std(SI_Diet$N15)
+ 
+Data2014 <- subset(SI_Diet,Year=="2014")
+mean(Data2014$N15)
+
+```
+
+2014 represents an odd break-point, in which it looks like prior to 2014, there is a pretty even distribution of samples across the 3 reproductive categories, but 2014 on there are few males in the sample. Males tend to have higher $\delta^{15}N$ than females, but $\delta^{15}N$ values in these two years doesn't appear to be abnormally low or at risk of biasing the analysis. Overall $\mu_{(\delta^{15}N)}$ is 4.75 $\pm$ 0.03 while $2015\mu_{(\delta^{15}N)}$ = 4.75 and $2014\mu_{(\delta^{15}N)}$ = 4.84, which is beyond 2 SDs, but it'ss 2 SDs **higher** than the mean, rather than **lower** as we might expect in years with no males in the sample.
+
+
+
+## Age
+
+```{r}
+
+# Full data set (N=669)
+ggplot(data = SI_Diet, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                 aes(fill=fAGE))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2006-2020 based on berry index (N=410;61%)
+ggplot(data = SI_Diet_Mharv, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=fAGE))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2007-2020 based landscape variables with time lag (N= 383; 57%)
+ggplot(data = SI_Diet_Tlag, aes(Year))+
+  geom_histogram(binwidth = 1,
+                 alpha=.6,
+                  aes(fill=fAGE))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+ scale_fill_viridis(discrete = TRUE)
+
+
+
+```
+
+There are no years in which the age distribution is highly skewed and might affect the model results
+
+
+
+## Nitrogen
+
+```{r}
+
+# Full data set (N=669)
+ggplot(data = SI_Diet, aes(N15))+
+  geom_histogram(binwidth = sd(SI_Diet$N15),
+                 alpha=.6,
+                 aes(fill=fYEAR))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2006-2020 based on berry index (N=410;61%)
+ggplot(data = SI_Diet_Mharv, aes(N15))+
+  geom_histogram(binwidth = sd(SI_Diet_Mharv$N15),
+                 alpha=.6,
+                 aes(fill=fYEAR))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+# Subset 2007-2020 based landscape variables with time lag (N= 383; 57%)
+ggplot(data = SI_Diet_Tlag, aes(N15))+
+  geom_histogram(binwidth = sd(SI_Diet_Tlag$N15),
+                 alpha=.6,
+                 aes(fill=fYEAR))+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  scale_fill_viridis(discrete = TRUE)
+
+
+
+```
+
+
+# Means, Medians, and Standard errors
+
+
+## Nitrogen
+
+```{r}
+
+Full.Median.N15 <- median(SI_Diet$N15)
+Full.Mu.N15 <- mean(SI_Diet$N15)
+Full.SE.N15 <- std(SI_Diet$N15)
+
+Harvest.Median.N15 <- median(SI_Diet_Mharv$N15)
+Harvest.Mu.N15 <- mean(SI_Diet_Mharv$N15)
+Harvest.SE.N15 <- std(SI_Diet_Mharv$N15)
+
+Tlag.median.N15 <- median(SI_Diet_Tlag$N15)
+Tlag.Mu.N15 <- mean(SI_Diet_Tlag$N15)
+Tlag.SE.N15 <- std(SI_Diet_Tlag$N15)
+
+```
+
+for $\delta^{15}N$ values:
+
+$Full\mu_{(\delta^{15}N)}$ = 4.75 $\pm$ 0.03, $Full \tilde{x}_{(\delta^{15}N)}$ = 4.6, 
+
+$Harvest(\mu_{(\delta^{15}N))}$ = 4.72 $\pm$ 0.04, $Harvest (\tilde{x}_{(\delta^{15}N))}$ = 4.57, and
+
+$Tlag(\mu_{(\delta^{15}N))}$ = 4.70 $\pm$ 0.04, $Tlag( \tilde{x}_{(\delta^{15}N))}$ = 4.53
+
+
+
+# Conclusions
+
+The distributions of important components explanetory variables (year, reproductive category, and age) do not vary across the three datasets. For the respons variable ($\delta^{15}N$) the means, medians, and standard errors change little across the data sets. Thus, we are confident that the landscape variables we determined to be important in explaining variation in the isotope values for the latter half of our data (61% of records and 58% of years in harvest data set and 57% of records and 54% of years for the time-lag data set) are also likely to be importnet to the earlier half of the data set, and the data as a whole. 
+
+
+## Age
+
+```{r}
+
+Full.Median.Age <- median(SI_Diet$age)
+Full.Mu.Age <- mean(SI_Diet$age)
+Full.SE.Age <- std(SI_Diet$age)
+
+Harvest.Median.age <- median(SI_Diet_Mharv$age)
+Harvest.Mu.Age <- mean(SI_Diet_Mharv$age)
+Harvest.SE.Age <- std(SI_Diet_Mharv$age)
+
+Tlag.median.Age <- median(SI_Diet_Tlag$age)
+Tlag.Mu.Age <- mean(SI_Diet_Tlag$age)
+Tlag.SE.Age <- std(SI_Diet_Tlag$age)
+
+```
+
+
+
