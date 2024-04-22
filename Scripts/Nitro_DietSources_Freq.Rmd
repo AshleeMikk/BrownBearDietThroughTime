@@ -69,6 +69,8 @@ library(ggExtra)
 library(ggiraphExtra)
 library(ggeffects)
 library(gridExtra)
+library(rphylopic)
+
 
 ```
 
@@ -77,6 +79,9 @@ library(gridExtra)
 ## Graphing theme
 
 ```{r}
+
+moose.img <- pick_phylopic(name = "Alces alces")
+bilb.img <- pick_phylopic(name = "Vaccinium")
 
 mytheme <- theme(
     axis.text = element_text(size = 10,face = "bold"),
@@ -230,7 +235,6 @@ rsq(x=SI_Diet$N15,SI_Diet$Mass)
 
 ## Heavy nitrogen
 ```{r}
-
 ggplot(data = SI_Diet_Mharv, aes(N15))+
   geom_histogram(binwidth = sd(SI_Diet_Mharv$N15))+
   scale_y_continuous(expand = c(0,0))+
@@ -247,6 +251,20 @@ ggplot(data = SI_Diet_Mharv, aes(N15, fill=fYEAR))+
   scale_fill_viridis(option="B", discrete = TRUE)
 
 
+
+ggplot(data = SI_Diet_Mharv, aes(age,N15))+
+  geom_jitter(aes(color=Repro),
+              width = 0.3,
+              alpha=0.4)+
+  scale_color_viridis(discrete = TRUE,
+                      option="C",
+                      end=0.95)
+```
+
+
+### Annual plots
+
+```{r}
 Annual_d15N_plot <- 
   ggplot(data = SI_Diet, aes(Year,N15))+
   geom_jitter(width = 0.2,
@@ -259,9 +277,33 @@ Annual_d15N_plot <-
   scale_y_continuous(expand=c(0.01,0.01))+
   scale_x_continuous(expand = c(0.01,0.01))+
   ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))
+Annual_d15N_plot
 
 ggsave(plot = Annual_d15N_plot,
        "Figures/Annual_d15N_plot.png",
+       height = 4.5,width = 6.5,
+       units="in",
+       dpi=700)
+
+
+Annual_0620_d15N_plot <- 
+  ggplot(data = SI_Diet, aes(Year,N15))+
+  geom_jitter(width = 0.2,
+              alpha=0.5,
+              aes(color=Repro))+
+  geom_boxplot(aes(group=fYEAR),
+               alpha=0.2)+
+  scale_color_viridis(discrete = TRUE)+
+  labs(color="Reproductive category")+
+  scale_y_continuous(expand=c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01),
+                     limits = c(2005.5,2021))+
+  ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))
+
+Annual_0620_d15N_plot
+
+ggsave(plot = Annual_0620_d15N_plot,
+       "Figures/Annual_0620_d15N_plot.png",
        height = 4.5,width = 6.5,
        units="in",
        dpi=700)
@@ -317,7 +359,6 @@ AntMod <- lmer(ZN15~ Zprop_ants+
 
 summary(AntMod)
 
-rsq(x=SI_Diet_Mharv$Prop_Ants, y=SI_Diet_Mharv$N15)
 
 AIcc_Ant <- wiqid::AICc(AntMod)
 
@@ -526,6 +567,26 @@ ggplot(data = SI_Diet_Mharv)+
             color=P[11],
             linetype="dotdash")
 
+
+AnnualBilberry <- 
+  ggplot(data = SI_Diet_Mharv,aes(Year, Bilberry))+
+  geom_line(linewidth=1,
+            color=P[10])+
+  geom_point(color=P[10],
+             size=3,
+             pch=17)+
+  scale_y_continuous(expand = c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01),
+                     breaks = seq(2006,2020,3))+
+  ylab("Bilberry production index")
+
+AnnualBilberry
+
+ggsave(plot = AnnualBilberry,
+       "Figures/AnnualBilberry.png",
+       width=6.5, height = 5.5,
+       units = "in",
+       dpi=700)
 
 ```
 
@@ -929,8 +990,55 @@ summary(AgexSexBilMharvbMod.Lag)
 AIcc_AgexSexBilbMharvLag <- wiqid::AICc(AgexSexBilMharvbMod.Lag)
 
 
+TLModels[[11]] <-  
+  AgexSexMharvbMod.Lag <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zharvest_moose_lag+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexMharvbMod.Lag)
+AIcc_AgexSexMharvbMod.Lag <- wiqid::AICc(AgexSexMharvbMod.Lag)
+
+AIcc_AgexSexMharvbMod.Lag-AIcc_AgexSexBilbMharvLag
+
 
 ```
+
+
+
+```{r}
+
+
+
+TLModels[[11]] <-  
+  AgexSexBilbMod.LagData <- 
+  lmer(ZN15~ Zage+sex+Zage*sex+Zbilb+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexBilbMod.LagData)
+AIcc_AgexSexBilbLagData <- wiqid::AICc(AgexSexBilbMod.LagData)
+
+
+
+TLModels[[12]] <-  
+  AgexSexBilMharvbMod.LagData <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zbilb+
+         Zharvest_moose+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+
+
+
+```
+
 
 
 
@@ -982,7 +1090,9 @@ TLModelNames <- c("Intercept",
                   "age plus sex",
                   "Age times sex",
                   "Age times sex, Lbilberry",
-                  "Age times sex, Lbilberry, LmooseHarv")
+                  "Age times sex, Lbilberry, LmooseHarv",
+                  "Age times sex, bilberry with lagged data",
+                  "Age times sex, bilberry, mooseHarv with lagged data")
 
 ##Generate and print AICc table
 print(aictab(cand.set = TLModels,
@@ -996,7 +1106,7 @@ write.csv(aictab(cand.set = TLModels,
                  modnames = TLModelNames,
                  sort = TRUE,
                  second.ord=TRUE),
-          file="Results\\TimeLagModels.csv")
+          file="Results\\Nitro_TimeLagModels.csv")
 
 ggplot(data = SI_Diet_Tlag, aes(age,N15))+
   geom_jitter(width = 0.2,
@@ -1012,6 +1122,19 @@ ggplot(data = SI_Diet_Tlag, aes(age,N15))+
 OK. So when we associate the landscape variables available the same year hair was grown, there is no evidence for a relationship with the $\delta^{15}N$ values in our brown bears. 
 
 But when we use a time lag and look at resource availability from the year prior to hair growth, we have strong support for a negative relationship between $\delta^{15}N$ and both bilberry index and moose harvest data.
+
+
+## Compare lagged models to direct models
+
+```{r}
+
+
+
+
+
+
+```
+
 
 # Results
 
@@ -1145,14 +1268,12 @@ ggsave(plot = Nitro.AgexSex.Plot,
 ```
 
 
-
-
-# Same as above with CIs
+ Same as above with CIs
 
 ```{r}
 
-summary(AgexSexMod)
-AgexSex.df <- ggpredict(AgexSexMod,
+summary(AgexSexBilbMod.Lag)
+AgexSex.df <- ggpredict(AgexSexBilbMod.Lag,
                         terms = c("Zage","sex[F,M]"))
 AgexSex.df$Age.og <- (AgexSex.df$x*sd(SI_Diet_Mharv$age))+
   mean(SI_Diet_Mharv$age)
@@ -1175,7 +1296,8 @@ AgexSex.df$UCI <- (AgexSex.df$conf.high*sd(SI_Diet_Mharv$N15))+
 AgexSex.Plot <- ggplot(data = AgexSex.df, aes(Age.og,Nitro.og))+
   geom_jitter(data = SI_Diet_Mharv, aes(age,N15, color=sex, pch=sex),
               size=2,
-              alpha=0.4)+
+              alpha=0.4,
+              width = 0.2)+
   geom_ribbon(aes(ymin=LCI, ymax=UCI, group=group, fill=group),
               alpha=0.15)+
   geom_line(aes(group=group,
@@ -1187,7 +1309,15 @@ AgexSex.Plot <- ggplot(data = AgexSex.df, aes(Age.og,Nitro.og))+
   scale_fill_manual(values = c(P[5],P[25]))+
   ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))+
   xlab("Bear age")+
-  labs(fill="sex",color="sex", pch="sex")
+  labs(fill="sex",color="sex", pch="sex")+
+   add_phylopic(img = moose.img,
+               x=1.3, y=7,
+               ysize = 0.5,
+               alpha=0.5)+
+  add_phylopic(img = bilb.img,
+               x=1.2, y=3.3,
+               ysize = 0.5,
+               alpha=0.6)
 
 AgexSex.Plot
 
@@ -1200,3 +1330,117 @@ ggsave(plot = AgexSex.Plot,
 
 ```
 
+### Bilberry
+
+
+```{r}
+
+summary(AgexSexBilbMod.Lag)
+Bilb_TopMod.df <- ggpredict(AgexSexBilbMod.Lag,
+                        terms = c("Zbilb_lag","sex[F,M]"))
+Bilb_TopMod.df$Bilb.og <- (Bilb_TopMod.df$x*sd(SI_Diet_Tlag$Bilberry_Lag))+
+  mean(SI_Diet_Tlag$Bilberry_Lag)
+
+Bilb_TopMod.df$Nitro.og <- (Bilb_TopMod.df$predicted*sd(SI_Diet_Tlag$N15))+
+  mean(SI_Diet_Tlag$N15)
+
+Bilb_TopMod.df$LCI <- (Bilb_TopMod.df$conf.low*sd(SI_Diet_Tlag$N15))+
+  mean(SI_Diet_Tlag$N15)
+Bilb_TopMod.df$UCI <- (Bilb_TopMod.df$conf.high*sd(SI_Diet_Tlag$N15))+
+  mean(SI_Diet_Tlag$N15)
+
+
+```
+
+
+
+```{r}
+
+Bilb_TopMod.Plot <- 
+  ggplot(data = Bilb_TopMod.df, aes(Bilb.og,Nitro.og))+
+  geom_jitter(data = SI_Diet_Tlag,
+              aes(Bilberry_Lag,N15, color=sex, pch=sex),
+              size=2,
+              alpha=0.4,
+              width = 0.0051)+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI, group=group, fill=group),
+              alpha=0.15)+
+  geom_line(aes(group=group,
+                color=group),
+            linewidth=0.9)+
+  scale_y_continuous(expand = c(0.01,0.0))+
+  scale_x_continuous(expand = c(0.002,0.002))+
+  scale_color_manual(values = c(P[5],P[25]))+
+  scale_fill_manual(values = c(P[5],P[25]))+
+  ylab(expression(paste(delta^15,"N (\u2030)",sep = "")))+
+  xlab("Bilberry Index")+
+  labs(fill="sex",color="sex", pch="sex")+
+   add_phylopic(img = moose.img,
+               x=0.04, y=7,
+               ysize = 0.5,
+               alpha=0.5)+
+  add_phylopic(img = bilb.img,
+               x=0.02, y=3.3,
+               ysize = 0.5,
+               alpha=0.6)
+
+Bilb_TopMod.Plot
+
+ggsave(plot = Bilb_TopMod.Plot,
+       "Figures/Bilb_TopMod_plot.png",
+       width = 6.5, height = 5,
+       units = "in",
+       dpi = 800)
+
+
+```
+
+
+
+## Both figures in one plot
+
+
+```{r}
+
+Bilb_TopMod_Nitro.plot2 <- Bilb_TopMod.Plot+
+  theme(legend.position = "none",
+        axis.title.y = element_blank())+
+  geom_text(label="B",
+            y= -21.7, x=1,
+            size=4)+
+  geom_text(label="B",
+            x=0.99, y=8.4,
+            size=4)
+Bilb_TopMod_Nitro.plot2
+
+AgexSex.Plot2 <- AgexSex.Plot+
+  theme(legend.position = "left",
+        axis.text.y = element_blank())+
+  geom_text(label="A",
+            y= -21.7, x=14000,
+            size=4)+
+  scale_color_manual(values=c(P[27], P[7]),
+                     breaks = c("M","F"))+
+  scale_fill_manual(values=c(P[27], P[7]),
+                     breaks = c("M","F"))+
+  scale_shape_manual(values=c(17,18),
+                     breaks=c("M","F"))+
+  geom_text(label="A",
+            x=19, y=8.4,
+            size=4)
+AgexSex.Plot2
+
+
+NitroFig <- 
+  grid.arrange(AgexSex.Plot2,
+               Bilb_TopMod_Nitro.plot2,
+               ncol=2,
+               nrow=1)
+
+ggsave(plot = NitroFig,
+       "Figures/TopModel_Nitro.png",
+       width=10.5, height = 6,
+       units = "in",
+       dpi=800)
+
+```

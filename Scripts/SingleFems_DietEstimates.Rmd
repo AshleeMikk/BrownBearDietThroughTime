@@ -2089,10 +2089,6 @@ output_options_SfemsSubsetPriors <- list(
   diag_save = TRUE,
   diag_name = "diagnostics_SfemsSubsetPriors",
   indiv_effect = FALSE,       
-  plot_post_save_png = FALSE, 
-  plot_pairs_save_png = FALSE,
-  plot_xy_save_png = FALSE,
-  diag_save_ggmcmc = FALSE,
   return_obj = TRUE)
 
 
@@ -2131,15 +2127,11 @@ head(diag.repro.annual.Sfems.subset)
 This matrix is set up so that each row is an estimate and it goes through all the years for each food source. So we have all the estimates for ants, year 1993 through 2020. For example, matrix element [9:35,2] are the mean estimates from year 1992 to 2020. The sims.list matrix within the jags output is an array with the 3000 estimates from the iterations, by 1:27 years, and the 1:5 food sources.
 
 ```{r}
-df.stats_repro.annual.Sfems.Subset <- read.csv("DfStats_ReproAnnual_SfemsSubsetPriors.csv")
+df.stats_repro.annual.Sfems.Subset <- read.csv("Results/DfStats_ReproAnnual_SfemsSubsetPriors.csv")
 
 head(df.stats_repro.annual.Sfems.Subset)
 
 SumStats.Sfems.Subset <- (df.stats_repro.annual.Sfems.Subset[3:22,c(1:3,9)])
-
-source$source_names
-
-DietEst.Sfems.Ants.Subset <- as.data.frame(BearDiet.repro.annual.Sfems.subset$BUGSoutput$sims.list$p.fac1[,,1])### creates a matrix of ant estimates for each year
 
 
 ##########     1995     #############################
@@ -3559,7 +3551,7 @@ SfemsSubset.posterior.ByYear.LineDot.fig<-ggplot(data = AnnualSfemSubsetBearEst,
   scale_y_continuous(expand = c(0,0),
                      limits = c(0,1),
                      breaks = seq(0,1,0.25))+
-  ylab("Mean posterior estimate of dietary proportions\nSolitary females")
+  ylab("Mean posterior diet proportion\nSolitary females")
 
 SfemsSubset.posterior.ByYear.LineDot.fig
 
@@ -3606,8 +3598,9 @@ SfemsSub.Proteins.ByYear.LineDot.fig<-
   scale_fill_viridis(discrete = TRUE)+
   scale_x_discrete(expand = c(0,0.1),
                    breaks=seq(1995,2020,5))+
-  scale_y_continuous(expand = c(0,0))+
-  ylab("Mean Posterior Diet Proportion\n For single Females")
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,0.25))+
+  ylab("Mean Posterior Diet Proportion\nSingle females")
 
 SfemsSub.Proteins.ByYear.LineDot.fig
 

@@ -45,6 +45,12 @@ library(lme4)
 library(viridis)
 library(wiqid)
 library(AICcmodavg)
+library(ggExtra)
+library(ggiraphExtra)
+library(ggeffects)
+library(gridExtra)
+library(rphylopic)
+
 
 ```
 
@@ -53,6 +59,9 @@ library(AICcmodavg)
 ## Graphing theme
 
 ```{r}
+
+moose.img <- pick_phylopic(name = "Alces alces")
+bilb.img <- pick_phylopic(name = "Vaccinium")
 
 mytheme <- theme(
     axis.text = element_text(size = 10,face = "bold"),
@@ -92,10 +101,11 @@ SI_Diet$C13.suess <- C13.suess
 SI_Diet$fYEAR <- as.factor(SI_Diet$year.represent)
 is.na(SI_Diet$C13)
 
-SI_Diet <- subset(SI_Diet, C13!="NA")
+SI_Diet <- subset(SI_Diet, C13.suess!="NA")
 SI_Diet <- subset(SI_Diet, reprostatus.represent!="NA")
-
 SI_Diet <- subset(SI_Diet,age!="NA")
+SI_Diet <- subset(SI_Diet, age<20)
+
 
 names(SI_Diet)[2] <- "Year"
 names(SI_Diet)[6] <- "Repro"
@@ -397,9 +407,6 @@ CalfMods[[3]] <-
       (1|BearID)+(1|Repro),
     data = SI_Diet_Mharv)
 
-summary(Quad.CalfMod)
-AIcc_Calf.Quad <- wiqid::AICc(Quad.CalfMod)
-
 
 
 CarbonModels[[4]] <-
@@ -514,31 +521,6 @@ CarbonModels[[6]] <-BilbMod <- LogBilbMod
 ```
 
 
-### Lingonberry model
-
-```{r}
-LingTest <- subset(SI_Diet_Mharv, Lingonberry!="")
-
-LT.int <-
-  lmer(ZC13~ 1+
-         (1|BearID)+(1|Repro),
-       data = LingTest)
-LT.AIC.Int <- wiqid::AICc(LT.int)
-
-LT.ling <- 
-  lmer(ZC13~ Zlingon+
-                  (1|BearID)+(1|Repro),
-                data = SI_Diet_Mharv)
-LT.AIC.Ling <- wiqid::AICc(LT.ling)
-
-
-ggplot(data =SI_Diet_Mharv, aes(Year, Lingonberry))+
-  geom_line()
-
-
-
-```
-
 ### Age model
 
 ```{r}
@@ -554,6 +536,26 @@ AIcc_Age <- wiqid::AICc(AgeMod)
 
 
 ```
+
+
+
+### Moose and Bilb
+
+```{r}
+
+
+CarbonModels[[8]] <-
+  LogBilbCalfMod <- 
+  lmer(ZC13~ Zbilb.ln+
+         Zcalves+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Mharv)
+
+AIcc_BilbCalf <- AICc(LogBilbCalfMod)
+summary(LogBilbCalfMod)
+
+```
+
 
 
 ## Time lagged models
@@ -618,7 +620,7 @@ print(AIcc_HarvMoose.Quad.Lag)
 
 summary(Quad.MooseHarvMod.Lag)
 
-TLModels[[2]] <- Log.MooseHarvMod.Lag
+TLModels[[2]] <- Lin.MooseHarvMod.Lag
 
 
 ```
@@ -632,7 +634,7 @@ TLModels[[2]] <- Log.MooseHarvMod.Lag
 CalfMods.lag <- list()
 
 CalfMods.lag [[1]] <-Lin.CalfMod.Lag <-
-  lmer(ZC13~ Zcalves+
+  lmer(ZC13~ Zcalves_lag+
                   (1|BearID)+(1|Repro),
                 data = SI_Diet_Tlag) 
 summary(Lin.CalfMod.Lag)
@@ -648,7 +650,7 @@ AIcc_Calf.Log.Lag <- wiqid::AICc(Log.CalfMod.Lag)
 
 CalfMods.lag[[3]] <-
   Quad.CalfMod.Lag <-
-  lmer(ZC13~Zcalves+
+  lmer(ZC13~Zcalves_lag+
       Zcalves.quad+
       (1|BearID)+(1|Repro),
     data = SI_Diet_Tlag)
@@ -663,7 +665,7 @@ print(AIcc_Calf.Quad.lag)
 
 
 TLModels[[3]] <-
-  Lin.CalfMod.Lag 
+  Log.CalfMod.Lag 
 
 
 ```
@@ -708,7 +710,7 @@ print(AIcc_MooseObs.Log.Lag)
 print(AIcc_MooseObs.Quad.Lag)
 summary(Log.MooseObsMod.Lag)
 
-TLModels[[4]] <-  Log.MooseObsMod.Lag
+TLModels[[4]] <-  Quad.MooseObsMod.Lag
 
 ```
 
@@ -789,7 +791,8 @@ CarbonModelNames <- c("Intercept",
                      "Calf Observation",
                      "Moose Observation",
                      "Bilberry Index",
-                     "Age")
+                     "Age",
+                     "Calf + lnBilbberry")
 
 ##Generate and print AICc table
 print(aictab(cand.set = CarbonModels,
@@ -804,6 +807,10 @@ write.csv(aictab(cand.set = CarbonModels,
                  sort = TRUE,
                  second.ord=TRUE),
           file="Results\\CarbonModels.csv")
+
+summary(CalfMod)
+summary(BilbMod)
+summary()
 
 
 
@@ -835,6 +842,7 @@ write.csv(aictab(cand.set = TLModels,
                  second.ord=TRUE),
           file="Results\\Carbon_TimeLagModels.csv")
 
+
 ggplot(data = SI_Diet_Tlag, aes(age,C13.suess))+
   geom_jitter(width = 0.2,
               alpha=0.6,
@@ -847,5 +855,218 @@ ggplot(data = SI_Diet_Tlag, aes(age,C13.suess))+
 
 
 
+## Compare the tim-lag with the year to year comparison
+
+Because I originally ran the models on a slightly different dataset, they models arent comaprable. But I need to conclusively show that one model structure is better than the other. So I need to run the best-supported model without the lag on the same data that I ran the tim-lagged models on and determine whether there is stronger support for the time-lagged models than the year-year models. (I also need ot do the same for the nitrogen models)
+
+For the year-year models, calf observations plus the bilberry index was the best model and moose observation had the most support for the time lag
+
+```{r}
+
+LogBilbCalfMod_lag <- lmer(ZC13~ Zbilb.ln+
+                             Zcalves+
+                             (1|BearID)+(1|Repro),
+                           data = SI_Diet_Tlag)
+
+AIcc_BilbCalf_lag <- AICc(LogBilbCalfMod_lag)
+summary(LogBilbCalfMod_lag)
+
+print(AIcc_BilbCalf_lag)
+
+```
+
+
+
 # Results
+
+## Moose calf observations figure
+
+```{r}
+
+summary(LogBilbCalfMod)
+Calf_TopMod_Carbon.df <- ggpredict(LogBilbCalfMod,
+                        terms = "Zcalves")
+Calf_TopMod_Carbon.df$Calves.og <- (Calf_TopMod_Carbon.df$x*sd(SI_Diet_Mharv$Calves))+
+  mean(SI_Diet_Mharv$Calves)
+
+Calf_TopMod_Carbon.df$Carb.og <- 
+  (Calf_TopMod_Carbon.df$predicted*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+
+Calf_TopMod_Carbon.df$LCI <-
+  (Calf_TopMod_Carbon.df$conf.low*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+Calf_TopMod_Carbon.df$UCI <- 
+  (Calf_TopMod_Carbon.df$conf.high*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+
+
+```
+
+
+
+```{r}
+
+Calves_TopMode_Carbon.Plot <- 
+  ggplot(data = Calf_TopMod_Carbon.df, aes(Calves.og,Carb.og))+
+  geom_jitter(data = SI_Diet_Mharv,
+              aes(Calves,C13.suess,
+                  color=Year),
+              size=2,
+              alpha=0.4,
+              width = 50)+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI),
+              alpha=0.15)+
+  geom_line(linewidth=0.9)+
+  scale_y_continuous(expand = c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01))+
+  ylab(expression(paste(delta^13,"C (\u2030)",sep = "")))+
+  xlab("Annual reported moose calf observations")+
+  scale_color_viridis(option="C")+
+  labs(color="Year")+
+  add_phylopic(img = moose.img,
+               x=4000, y=-22,
+               ysize = 0.3,
+               alpha=0.3)+
+  add_phylopic(img = bilb.img,
+               x=4000, y=-24,
+               ysize = 0.3,
+               alpha=0.3)
+
+Calves_TopMode_Carbon.Plot
+
+ggsave(plot = Calves_TopMode_Carbon.Plot,
+       "Figures/Calves_TopMode_Carbon.png",
+       width = 6.5, height = 6.5,
+       units = "in",
+       dpi = 800)
+
+```
+
+
+## Bilberry figure
+
+```{r}
+
+summary(LogBilbCalfMod)
+Bilb_TopMod_Carbon.df <- ggpredict(LogBilbCalfMod,
+                        terms = "Zbilb.ln",
+                        back_transform = FALSE)
+
+bilb.scratch1 <- Bilb_TopMod_Carbon.df$x*sd(SI_Diet_Mharv$Bilberry.LN)
+bilb.scratch2 <- bilb.scratch1+mean(SI_Diet_Mharv$Bilberry.LN)
+print(bilb.scratch2)
+bilb.scratch3 <- exp(bilb.scratch2)
+print(bilb.scratch3)
+
+Bilb_TopMod_Carbon.df$Bilb.og <- bilb.scratch3
+
+Bilb_TopMod_Carbon.df$Bilb.exp <- exp(Bilb_TopMod_Carbon.df$Bilb.og)
+
+Bilb_TopMod_Carbon.df$Carb.og <- 
+  (Bilb_TopMod_Carbon.df$predicted*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+
+Bilb_TopMod_Carbon.df$LCI <-
+  (Bilb_TopMod_Carbon.df$conf.low*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+Bilb_TopMod_Carbon.df$UCI <- 
+  (Bilb_TopMod_Carbon.df$conf.high*sd(SI_Diet_Mharv$C13.suess))+
+  mean(SI_Diet_Mharv$C13.suess)
+
+
+```
+
+
+
+```{r}
+library(rphylopic)
+
+
+moose.img <- pick_phylopic(name = "Alces alces")
+bilb.img <- pick_phylopic(name = "Vaccinium")
+
+Bilb_TopMod_Carbon.plot <- 
+  ggplot(data = Bilb_TopMod_Carbon.df, aes(Bilb.og,Carb.og))+
+  geom_jitter(data = SI_Diet_Mharv,
+              aes(Bilberry,C13.suess,
+                  color=Year),
+              size=2,
+              alpha=0.4,
+              width = 0.0051)+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI),
+              alpha=0.15)+
+  geom_line(linewidth=0.9)+
+  scale_y_continuous(expand = c(0.01,0.01))+
+  scale_x_continuous(expand = c(0.01,0.01))+
+  ylab(expression(paste(delta^13,"C (\u2030)",sep = "")))+
+  xlab("Annual bilberry production index")+
+  scale_color_viridis(option="C")+
+  labs(color="Year")+
+  add_phylopic(img = moose.img,
+               x=0.025, y=-22,
+               ysize = 0.3,
+               alpha=0.3)+
+  add_phylopic(img = bilb.img,
+               x=0.025, y=-24,
+               ysize = 0.3,
+               alpha=0.3)
+
+Bilb_TopMod_Carbon.plot
+
+ggsave(plot = Bilb_TopMod_Carbon.plot,
+       "Figures/Bilb_TopMod_Carbon.png",
+       width = 6.5, height = 6.5,
+       units = "in",
+       dpi = 800)
+
+```
+
+
+
+## Both figures in one plot
+
+
+```{r}
+
+Bilb_TopMod_Carbon.plot2 <- Bilb_TopMod_Carbon.plot+
+  theme(legend.position = "none",
+        axis.title.y = element_blank())+
+  geom_text(label="B",
+            y= -21.7, x=1,
+            size=4)
+Bilb_TopMod_Carbon.plot2
+
+Calves_TopMode_Carbon.Plot2 <- Calves_TopMode_Carbon.Plot+
+  theme(legend.position = "left",
+        axis.text.y = element_blank())+
+  geom_text(label="A",
+            y= -21.7, x=14000,
+            size=4)
+Calves_TopMode_Carbon.Plot2
+
+
+CarbonFig <- 
+  grid.arrange(Calves_TopMode_Carbon.Plot2,
+               Bilb_TopMod_Carbon.plot2,
+               ncol=2,
+               nrow=1)
+
+ggsave(plot = CarbonFig,
+       "Figures/TopModel_Carbon.png",
+       width=10.5, height = 6,
+       units = "in",
+       dpi=800)
+
+```
+
+
+
+```{r}
+
+
+ggplot(data = SI_Diet_Mharv, aes(Bilberry, Calves))+
+  geom_point()
+
+```
 
