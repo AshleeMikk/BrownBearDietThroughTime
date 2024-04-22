@@ -1,0 +1,1045 @@
+---
+title: "Dams_DietEstimates"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Introduction
+
+This RMarkdown file is an extension of the original brown bear diet analysis that examined annual estimates of the different reproduction classes (BearDietAnalysis_Repro_SeperateAnnual) in the file path "~Rprojects/Diet-sensitivity-to-TDFs-and-priors/ReproductiveClassAnnual".
+
+The analysis has been growing and getting messy, and as MS 3 has evolved, I have started a new R project to focus on the research questions and analysis we have defined.
+
+# Environment
+
+
+## Load data and packages
+
+```{r clean up and load packages, include=FALSE}
+# clear workspace and load packages
+rm(list = ls())
+```
+
+
+```{r clean up and load packages, include=FALSE}
+
+setwd("~Rprojects/BrownBearDietThroughTime")
+
+```
+
+
+
+
+```{r clean up and load packages, include=FALSE}
+library(readxl)
+library(viridis)
+library(ggplot2)
+library(MixSIAR)
+library(lme4)
+library(gridExtra)
+
+```
+
+NOTE: In excel I removed all columns but those pertinent to the analysis: C13.Suess, N15, BearID, and Reprostatus.represent. represent. I renamed the isotope columns to match the MixSIAR standard. I also converted my covariates into categorical covariates with a dummy variable of numbers for each category. For example, repro.status became repro where SolitaryF=1, SolitaryM=2,WithCubs=3,and WithMother=4. Year.represent was renamed yr with 1995=1 through 2015=20. BearID was changed to b1 through b378.
+
+## Graph theme
+
+```{r}
+
+
+mytheme <- theme(
+    axis.text = element_text(size = 12,face = "bold"),
+    axis.title = element_text(size = 14, face = "bold"),
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_line(color = "grey96"),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(colour = "black",linewidth = 1),
+    axis.ticks = element_line(linewidth = 1),
+    legend.position = "top",
+    legend.key = element_rect(fill = NULL)
+    )
+theme_set(mytheme)
+
+P <- palette(viridis(40))
+P <- palette(viridis(40))
+
+```
+
+# Full Dataset
+
+
+# Outliers removed (subset)
+## Load Data
+
+
+```{r load data, include=FALSE}
+
+mix.repro.annual.Dams.Subset <- load_mix_data(
+ filename = "Data/Dams_NoOutliers.csv",
+ iso_names = c("d13C","d15N"),
+ factors = "year",
+ fac_random = TRUE,
+ fac_nested = FALSE,
+ cont_effects = NULL
+)
+
+source <- load_source_data(
+ filename = "Data/bears_sources_MIXSIAR_ConcDep_AnnualYr.csv",
+ source_factors = NULL,
+ conc_dep = TRUE,
+ data_type = "means",
+ mix.repro.annual.Dams.Subset
+)
+
+disc <- load_discr_data(
+ filename = "Data/bears_discrimination_MixSIAR.csv",
+ mix.repro.annual.Dams.Subset
+)
+
+
+```
+
+
+### Plot data & Pre-run checks
+
+```{r}
+plot_data(
+ filename = "bear.repro.annual.DamsSubset_isospace_MixSIAR",
+ plot_save_pdf = TRUE,
+ plot_save_png = FALSE,
+ mix.repro.annual.Dams.Subset,
+ source,
+ disc
+ )
+
+calc_area(source=source,
+          mix=mix.repro.annual.Dams.Subset,
+          discr=disc)
+
+BearDietPriors_Simmr <- c(7,52,11,26,3)
+BearDietPriors_Dams_Alpha <-
+  BearDietPriors_Simmr*length(BearDietPriors_Simmr)/sum(BearDietPriors_Simmr)
+
+plot_prior(alpha.prior=BearDietPriors_Dams_Alpha,
+		   source=source,
+		   plot_save_pdf=TRUE,
+		   plot_save_png=TRUE,
+		   filename="prior_plot_BrownBear_inf")
+
+```
+
+
+
+### Write the JAGS model file
+```{r}
+
+model_filename <- "MixSIAR_Bear.Repro.annual_model.txt" # Name of the JAGS model file
+resid_err <- TRUE
+process_err <- TRUE
+write_JAGS_model(model_filename,
+                 resid_err,
+                 process_err,
+                 mix.repro.annual.Dams.Subset,
+                 source)
+
+```
+
+
+
+### Run Dams prelim test model
+
+01.03.2024 test run took 54 seconds
+
+```{r, include=FALSE}
+
+start.time <- Sys.time()
+mix.repro.annual.DamsSubset.test <- run_model(
+ run = "test",
+ mix.repro.annual.Dams.Subset,
+ source,
+ disc,
+ model_filename,
+ alpha.prior = BearDietPriors_Dams_Alpha
+ )
+
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+```
+
+### Run real Dams model 
+
+Began running model on "extreme" setting with informative priors- 01.03.2024
+
+
+```{r}
+
+start.time <- Sys.time()
+mix.repro.annual.DamsSubset.extreme <- 
+  run_model(
+    run ="extreme",
+    mix.repro.annual.Dams.Subset,
+    source,
+    disc,
+    model_filename,
+    alpha.prior = BearDietPriors_Dams_Alpha
+ )
+
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+
+
+########################################
+output_options_DamsSubset <- list(summary_save = TRUE,                 
+                       summary_name = "summary_statistics_DamsSubset", 
+                       sup_post = TRUE,                    
+                       plot_post_save_pdf = FALSE,           
+                       plot_post_name = "posterior_density_DamsSubset",
+                       sup_pairs = TRUE,             
+                       plot_pairs_save_pdf = TRUE,    
+                       plot_pairs_name = "pairs_plot_DamsSubset",
+                       sup_xy = TRUE,           
+                       plot_xy_save_pdf = TRUE,
+                       plot_xy_name = "xy_plot_DamsSubset",
+                       gelman = TRUE,
+                       heidel = FALSE,  
+                       geweke = TRUE,   
+                       diag_save = TRUE,
+                       diag_name = "diagnostics_DamsSubset",
+                       indiv_effect = FALSE,       
+                       return_obj = TRUE)
+
+BearDiet.repro.annual.Dams.subset <- mix.repro.annual.DamsSubset.extreme
+
+df.stats_repro.annual.DamsSubset <- output_stats(
+  BearDiet.repro.annual.Dams.subset,
+  mix.repro.annual.Dams.Subset,
+  source,
+  output_options_DamsSubset)
+
+write.csv(df.stats_repro.annual.DamsSubset,
+          "DfStats_ReproAnnual_DamsSubset.csv")
+
+row.names(df.stats_repro.annual.DamsSubset)
+
+##########################
+
+```
+
+
+
+
+## Diagnostics
+
+```{r}
+
+diag.repro.annual.DamsSubset <- output_diagnostics(
+  BearDiet.repro.annual.Dams.subset,
+  mix.repro.annual.Dams.Subset, 
+  source,
+  output_options_DamsSubset)
+
+```
+
+
+
+
+## Building data tables
+
+This matrix is set up so that each row is an estimate and it goes through all the years for each food source. So we have all the estimates for ants, year 1993 through 2020. For example, matrix element [9:35,2] are the mean estimates from year 1992 to 2020. The sims.list matrix within the jags output is an array with the 3000 estimates from the iterations, by 1:27 years, and the 1:5 food sources.
+
+
+
+### Mean diet proportions of dams by year
+```{r}
+df.stats_repro.annual.DamsSubset <- read.csv("Results/DfStats_ReproAnnual_DamsSubset_Clean.csv")
+
+head(df.stats_repro.annual.DamsSubset)
+
+
+source$source_names
+
+
+```
+
+### Diet means across years- Dams
+
+```{r}
+
+ggplot(data = df.stats_repro.annual.DamsSubset,
+       aes(Year,Mean, color=Source))+
+  geom_line(aes(color=Source, group=Source),
+            alpha=0.8)+
+  geom_point(size=3)+
+  scale_color_viridis(discrete = TRUE, end=0.95)+
+  ylab("Estimated mean diet proportions for dams")+
+  xlab("Year")+
+  scale_x_discrete(expand = c(0,0),
+                     breaks = seq(1995,2020,5))
+  
+
+
+```
+
+
+### Dam estimates by year
+
+```{r}
+
+##### 1995
+
+DietEst.Dams.subset.1995 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,1,])#extracts a matrix of estimates for 1995 across all 5 food sources
+
+
+names(DietEst.Dams.subset.1995)[1] <- "Ants"
+names(DietEst.Dams.subset.1995)[2] <- "Bilberry"
+names(DietEst.Dams.subset.1995)[3] <- "Crowberry"
+names(DietEst.Dams.subset.1995)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.1995)[5] <- "Moose"
+DietEst.Dams.subset.1995$Year <- rep(1995,nrow(DietEst.Dams.subset.1995))
+
+
+##### 1996
+
+DietEst.Dams.subset.1996 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,2,])#extracts a matrix of estimates for 1996 across all 5 food sources
+
+
+names(DietEst.Dams.subset.1996)[1] <- "Ants"
+names(DietEst.Dams.subset.1996)[2] <- "Bilberry"
+names(DietEst.Dams.subset.1996)[3] <- "Crowberry"
+names(DietEst.Dams.subset.1996)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.1996)[5] <- "Moose"
+DietEst.Dams.subset.1996$Year <- rep(1996,3000)
+
+
+##### 1997
+
+DietEst.Dams.subset.1997 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,3,])#extracts a matrix of estimates for 1997 across all 5 food sources
+
+
+names(DietEst.Dams.subset.1997)[1] <- "Ants"
+names(DietEst.Dams.subset.1997)[2] <- "Bilberry"
+names(DietEst.Dams.subset.1997)[3] <- "Crowberry"
+names(DietEst.Dams.subset.1997)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.1997)[5] <- "Moose"
+DietEst.Dams.subset.1997$Year <- rep(1997,3000)
+
+##### 1998
+
+DietEst.Dams.subset.1998 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,4,])#extracts a matrix of estimates for 1998 across all 5 food sources
+
+
+names(DietEst.Dams.subset.1998)[1] <- "Ants"
+names(DietEst.Dams.subset.1998)[2] <- "Bilberry"
+names(DietEst.Dams.subset.1998)[3] <- "Crowberry"
+names(DietEst.Dams.subset.1998)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.1998)[5] <- "Moose"
+DietEst.Dams.subset.1998$Year <- rep(1998,3000)
+
+
+
+##### 1999
+
+DietEst.Dams.subset.1999 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,5,])#extracts a matrix of estimates for 1999 across all 5 food sources
+
+
+names(DietEst.Dams.subset.1999)[1] <- "Ants"
+names(DietEst.Dams.subset.1999)[2] <- "Bilberry"
+names(DietEst.Dams.subset.1999)[3] <- "Crowberry"
+names(DietEst.Dams.subset.1999)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.1999)[5] <- "Moose"
+DietEst.Dams.subset.1999$Year <- rep(1999,3000)
+
+
+
+
+##### 2000
+
+DietEst.Dams.subset.2000 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,6,])#extracts a matrix of estimates for 2000 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2000)[1] <- "Ants"
+names(DietEst.Dams.subset.2000)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2000)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2000)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2000)[5] <- "Moose"
+DietEst.Dams.subset.2000$Year <- rep(2000,3000)
+
+
+
+##### 2001
+
+DietEst.Dams.subset.2001 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,7,])#extracts a matrix of estimates for 2001 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2001)[1] <- "Ants"
+names(DietEst.Dams.subset.2001)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2001)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2001)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2001)[5] <- "Moose"
+DietEst.Dams.subset.2001$Year <- rep(2001,3000)
+
+
+
+##### 2002
+
+DietEst.Dams.subset.2002 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,8,])#extracts a matrix of estimates for 2002 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2002)[1] <- "Ants"
+names(DietEst.Dams.subset.2002)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2002)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2002)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2002)[5] <- "Moose"
+DietEst.Dams.subset.2002$Year <- rep(2002,3000)
+
+
+
+##### 2003
+
+DietEst.Dams.subset.2003 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,9,])#extracts a matrix of estimates for 2003 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2003)[1] <- "Ants"
+names(DietEst.Dams.subset.2003)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2003)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2003)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2003)[5] <- "Moose"
+DietEst.Dams.subset.2003$Year <- rep(2003,3000)
+
+
+
+
+##### 2004
+
+DietEst.Dams.subset.2004 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,10,])#extracts a matrix of estimates for 2004 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2004)[1] <- "Ants"
+names(DietEst.Dams.subset.2004)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2004)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2004)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2004)[5] <- "Moose"
+DietEst.Dams.subset.2004$Year <- rep(2004,3000)
+
+
+
+##### 2005
+
+DietEst.Dams.subset.2005 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,11,])#extracts a matrix of estimates for 2005 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2005)[1] <- "Ants"
+names(DietEst.Dams.subset.2005)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2005)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2005)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2005)[5] <- "Moose"
+DietEst.Dams.subset.2005$Year <- rep(2005,3000)
+
+
+
+##### 2006
+
+DietEst.Dams.subset.2006 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,12,])#extracts a matrix of estimates for 2006 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2006)[1] <- "Ants"
+names(DietEst.Dams.subset.2006)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2006)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2006)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2006)[5] <- "Moose"
+DietEst.Dams.subset.2006$Year <- rep(2006,3000)
+
+
+
+##### 2007
+
+DietEst.Dams.subset.2007 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,13,])#extracts a matrix of estimates for 2007 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2007)[1] <- "Ants"
+names(DietEst.Dams.subset.2007)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2007)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2007)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2007)[5] <- "Moose"
+DietEst.Dams.subset.2007$Year <- rep(2007,3000)
+
+
+
+##### 2008
+
+DietEst.Dams.subset.2008 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,14,])#extracts a matrix of estimates for 2008 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2008)[1] <- "Ants"
+names(DietEst.Dams.subset.2008)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2008)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2008)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2008)[5] <- "Moose"
+DietEst.Dams.subset.2008$Year <- rep(2008,3000)
+
+
+
+
+##### 2009
+
+DietEst.Dams.subset.2009 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,15,])#extracts a matrix of estimates for 2009 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2009)[1] <- "Ants"
+names(DietEst.Dams.subset.2009)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2009)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2009)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2009)[5] <- "Moose"
+DietEst.Dams.subset.2009$Year <- rep(2009,3000)
+
+
+
+
+##### 2010
+
+DietEst.Dams.subset.2010 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,16,])#extracts a matrix of estimates for 2010 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2010)[1] <- "Ants"
+names(DietEst.Dams.subset.2010)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2010)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2010)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2010)[5] <- "Moose"
+DietEst.Dams.subset.2010$Year <- rep(2010,3000)
+
+
+
+##### 2011
+
+DietEst.Dams.subset.2011 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,17,])#extracts a matrix of estimates for 2011 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2011)[1] <- "Ants"
+names(DietEst.Dams.subset.2011)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2011)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2011)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2011)[5] <- "Moose"
+DietEst.Dams.subset.2011$Year <- rep(2011,3000)
+
+
+
+##### 2012
+
+DietEst.Dams.subset.2012 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,18,])#extracts a matrix of estimates for 2012 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2012)[1] <- "Ants"
+names(DietEst.Dams.subset.2012)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2012)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2012)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2012)[5] <- "Moose"
+DietEst.Dams.subset.2012$Year <- rep(2012,3000)
+
+
+
+##### 2013
+
+DietEst.Dams.subset.2013 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,19,])#extracts a matrix of estimates for 2013 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2013)[1] <- "Ants"
+names(DietEst.Dams.subset.2013)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2013)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2013)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2013)[5] <- "Moose"
+DietEst.Dams.subset.2013$Year <- rep(2013,3000)
+
+
+
+##### 2014
+
+DietEst.Dams.subset.2014 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,20,])#extracts a matrix of estimates for 2014 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2014)[1] <- "Ants"
+names(DietEst.Dams.subset.2014)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2014)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2014)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2014)[5] <- "Moose"
+DietEst.Dams.subset.2014$Year <- rep(2014,3000)
+
+
+
+##### 2015
+
+DietEst.Dams.subset.2015 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,21,])#extracts a matrix of estimates for 2015 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2015)[1] <- "Ants"
+names(DietEst.Dams.subset.2015)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2015)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2015)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2015)[5] <- "Moose"
+DietEst.Dams.subset.2015$Year <- rep(2015,3000)
+
+
+##### 2016
+
+DietEst.Dams.subset.2016 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,22,])#extracts a matrix of estimates for 2016 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2016)[1] <- "Ants"
+names(DietEst.Dams.subset.2016)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2016)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2016)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2016)[5] <- "Moose"
+DietEst.Dams.subset.2016$Year <- rep(2016,3000)
+
+
+##### 2017
+
+DietEst.Dams.subset.2017 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,23,])#extracts a matrix of estimates for 2017 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2017)[1] <- "Ants"
+names(DietEst.Dams.subset.2017)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2017)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2017)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2017)[5] <- "Moose"
+DietEst.Dams.subset.2017$Year <- rep(2017,3000)
+
+
+##### 2018
+
+DietEst.Dams.subset.2018 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,24,])#extracts a matrix of estimates for 2018 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2018)[1] <- "Ants"
+names(DietEst.Dams.subset.2018)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2018)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2018)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2018)[5] <- "Moose"
+DietEst.Dams.subset.2018$Year <- rep(2018,3000)
+
+
+
+
+##### 2019
+
+DietEst.Dams.subset.2019 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,25,])#extracts a matrix of estimates for 2019 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2019)[1] <- "Ants"
+names(DietEst.Dams.subset.2019)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2019)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2019)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2019)[5] <- "Moose"
+DietEst.Dams.subset.2019$Year <- rep(2019,3000)
+
+
+##### 2020
+
+DietEst.Dams.subset.2020 <-as.data.frame( BearDiet.repro.annual.Dams.subset$BUGSoutput$sims.list$p.fac1[,26,])#extracts a matrix of estimates for 2020 across all 5 food sources
+
+
+names(DietEst.Dams.subset.2020)[1] <- "Ants"
+names(DietEst.Dams.subset.2020)[2] <- "Bilberry"
+names(DietEst.Dams.subset.2020)[3] <- "Crowberry"
+names(DietEst.Dams.subset.2020)[4] <- "Lingonberry"
+names(DietEst.Dams.subset.2020)[5] <- "Moose"
+DietEst.Dams.subset.2020$Year <- rep(2020,nrow(DietEst.Dams.subset.2020))
+
+
+
+
+DietEst.Dams.subset.Allyears <- rbind.data.frame(DietEst.Dams.subset.1995,
+                                            DietEst.Dams.subset.1996,
+                                            DietEst.Dams.subset.1997,
+                                            DietEst.Dams.subset.1998,
+                                            DietEst.Dams.subset.1999,
+                                            DietEst.Dams.subset.2000,
+                                            DietEst.Dams.subset.2001,
+                                            DietEst.Dams.subset.2002,
+                                            DietEst.Dams.subset.2003,
+                                            DietEst.Dams.subset.2004,
+                                            DietEst.Dams.subset.2005,
+                                            DietEst.Dams.subset.2006,
+                                            DietEst.Dams.subset.2007,
+                                            DietEst.Dams.subset.2008,
+                                            DietEst.Dams.subset.2009,
+                                            DietEst.Dams.subset.2010,
+                                            DietEst.Dams.subset.2011,
+                                            DietEst.Dams.subset.2012,
+                                            DietEst.Dams.subset.2013,
+                                            DietEst.Dams.subset.2014,
+                                            DietEst.Dams.subset.2015,
+                                            DietEst.Dams.subset.2016,
+                                            DietEst.Dams.subset.2017,
+                                            DietEst.Dams.subset.2018,
+                                            DietEst.Dams.subset.2019,
+                                            DietEst.Dams.subset.2020)
+
+
+write.csv(DietEst.Dams.subset.Allyears,
+          "Dams_Subset_Allyears.csv")
+
+BearDietEst.Dams.subset.Posterior <- read.csv("Dams_Subset_Allyears.csv")
+
+
+```
+
+
+
+## Graphical output Females with Offspring
+
+#### means across year
+
+```{r}
+
+
+AnnualDamsSubEst <- read.csv("Results/DfStats_ReproAnnual_DamsSubset_clean.csv")
+
+
+Dams.Subset.posterior.ByYear.LineDot.fig <- 
+  ggplot(data = AnnualDamsSubEst,
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI, 
+                  group=Source, fill=Source, color=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,group=Source),
+            linewidth=1.2)+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=3)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete=TRUE)+
+  ylab("Mean posterior estimate of dietary proportions\nFemales with dependent offspring")+
+  scale_x_discrete(breaks=seq(1995, 2020,5),
+                   expand = c(0,0.1))+
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,1),
+                     breaks = seq(0,1,0.25))
+
+Dams.Subset.posterior.ByYear.LineDot.fig
+
+ggsave(plot=Dams.Subset.posterior.ByYear.LineDot.fig,
+       "DamsSubset.Posterior.AllYearsLineDot.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+Dams.Subset.posterior.0620.LineDot.fig <- 
+  ggplot(data = subset(AnnualDamsSubEst, Year>2005),
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI, 
+                  group=Source, fill=Source, color=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,group=Source),
+            linewidth=1.2)+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=3)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete=TRUE)+
+  ylab("Mean posterior estimate of dietary proportions\nFemales with dependent offspring")+
+  scale_x_discrete(breaks=seq(2006, 2020,3),
+                   expand = c(0,0.1))+
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(0,1),
+                     breaks = seq(0,1,0.25))
+
+Dams.Subset.posterior.0620.LineDot.fig
+
+ggsave(plot=Dams.Subset.posterior.0620.LineDot.fig,
+       "Figures/DamsSubset_posterior_0620_LineDot.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+```
+
+#### Full output across all years
+
+```{r}
+
+DamsSubset.posterior.ByYear.fig <- 
+  ggplot(
+    data = BearDietEst.Dams.subset.Posterior)+
+  geom_area(aes(Ants),
+            stat="bin",
+            bins=50,
+            fill=P[1],
+            alpha=0.5,
+            color=P[1])+
+  geom_area(aes(Bilberry),
+            stat="bin",
+            bins=50,
+            fill=P[10],
+            alpha=0.5,
+            color=P[10])+
+  geom_area(aes(Crowberry),
+            stat="bin",
+            bins=50,
+            fill=P[20],
+            alpha=0.5,
+            color=P[20])+
+  geom_area(aes(Lingonberry),
+            stat="bin",
+            bins=50,
+            fill=P[30],
+            alpha=0.5,
+            color=P[30])+
+  geom_area(aes(Moose),
+            stat="bin",
+            bins=50,
+            fill=P[40],
+            alpha=0.4,
+            color=P[40])+
+  facet_wrap(~Year)+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  xlab("Posterior estimates of dietary proportions\nFemales with dependent offspring")
+
+DamsSubset.posterior.ByYear.fig
+
+ggsave(plot=DamsSubset.posterior.ByYear.fig,
+       "DamsSubset_Posterior_ByYear.png",
+       width = 11.5,
+       height = 9,
+       units = "in",
+       dpi = 900)
+  
+
+
+
+
+DamsSubset.posterior.All.fig <- 
+  ggplot(BearDietEst.Dams.subset.Posterior)+
+  geom_area(aes(x=Ants),
+            stat="bin",
+            bins=100,
+            fill=P[1],
+            color=P[1],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Bilberry),
+            stat="bin",
+            bins=100,
+            fill=P[10],
+            color=P[10],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Crowberry),
+            stat="bin",
+            bins=100,
+            fill=P[20],
+            color=P[20],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Lingonberry),
+            stat="bin",
+            bins=100,
+            fill=P[30],
+            color=P[30],
+            alpha=0.4,
+            linewidth=1)+
+  geom_area(aes(x=Moose),
+            stat="bin",
+            bins=100,
+            fill=P[40],
+            color=P[40],
+            alpha=0.4,
+            linewidth=1)+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))+
+  xlab("Estimated dietary proportion\n Females with dependent offspring")+
+  ylab("Frequency in posterior estimates")+
+  geom_text(label="Ants",
+            x=0.075, y=27000,
+            size=5,
+            color=P[1])+
+  geom_text(label="Bilberry",
+            x=0.7, y=11000,
+            size=5,
+            color=P[10])+
+  geom_text(label="Crowberry",
+            x=0.09, y=35000,
+            size=5,
+            color=P[20])+
+  geom_text(label="Lingonberry",
+            x=0.20, y=12000,
+            size=5,
+            color=P[30])+
+  geom_text(label="Moose",
+            x=0.06, y=70000,
+            size=5,
+            color=P[40])
+
+DamsSubset.posterior.All.fig
+
+ggsave(plot=DamsSubset.posterior.All.fig,
+       "DamsSubset.PosteriorDistribution.AllYears.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+
+```
+
+
+### Proteins
+
+```{r}
+
+Trash1 <- subset(AnnualDamsSubEst, Source!="Crowberry")
+Trash2 <- subset(Trash1, Source!="Bilberry")
+DamsSub.Proteins <- subset(Trash2, Source!="Lingonberry")
+
+write.csv(DamsSub.Proteins,
+          "Results/Proteins_DamSub.csv")
+DamsSub.Proteins <- read.csv("Results/Proteins_DamSub.csv")
+
+DamsSub.proteins.LineDot.fig <- 
+  ggplot(data = subset(DamsSub.Proteins, Year>1994),
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI,
+                  group=Source,
+                  fill=Source, color=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,group=Source),
+            linewidth=1.2)+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=3)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete=TRUE)+
+  ylab("Mean posterior Diet proportion\nFemlaes with dependent offspring")+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0),
+                     limits=c(0,0.25))
+
+DamsSub.proteins.LineDot.fig
+
+ggsave(plot=DamsSub.proteins.LineDot.fig,
+       "DamsSub.Proteins.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+DamsSub.proteins.0620.LineDot.fig <- 
+  ggplot(data = subset(DamsSub.Proteins, Year>2005),
+       aes(Year,Mean))+
+  geom_ribbon(aes(ymin=LCI, ymax=UCI,
+                  group=Source,
+                  fill=Source, color=Source),
+              alpha=0.1)+
+  geom_line(aes(color=Source,group=Source),
+            linewidth=1.2)+
+  geom_point(aes(color=Source,
+                 group=Source,
+                 pch=Source),
+             size=3)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_fill_viridis(discrete=TRUE)+
+  ylab("Mean posterior Diet proportion\nFemlaes with dependent offspring")+
+  scale_x_discrete(expand = c(0,0.1),
+                   breaks=seq(1995,2020,5))+
+  scale_y_continuous(expand = c(0,0),
+                     limits=c(0,0.12))
+
+DamsSub.proteins.0620.LineDot.fig
+
+ggsave(plot=DamsSub.proteins.0620.LineDot.fig,
+       "Figures/DamsSub_proteins_0620_LineDot.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+
+```
+
+
+
+# Other imprtant figures
+
+
+
+## Nitrogen through time
+
+```{r}
+
+Isotopes <- read.csv(
+  "C:\\Users\\amikk\\Documents\\Rprojects\\Diet-sensitivty-to-TDFs-and-priors\\BearStableIsotopes_Updated20230526.csv",
+                     header = TRUE)
+
+Isotopes <- subset(Isotopes, year>1994)
+
+Isotopes <- subset(Isotopes, reprostatus.represent!="NA")
+
+
+Nitro_Time_Repro_fig <- ggplot(data=Isotopes, aes(year, N15,
+                          color=reprostatus.represent,
+                          pch=reprostatus.represent))+
+  geom_jitter(width = 0.1,
+              size=2,
+              alpha=0.4)+
+  geom_boxplot(aes(group=year),
+               alpha=0.2)+
+  facet_wrap(~reprostatus.represent)+
+  ylab(expression(paste(delta^15, "N (\u2030)", sep = "")))+
+  xlab("Year")+
+  scale_color_manual(values = c(P[7],P[13],P[18],P[24]))+
+  labs(color="Repro Status",
+       pch="Repro Status")
+
+Nitro_Time_Repro_fig
+
+ggsave(plot=Nitro_Time_Repro_fig,
+       "Nitro_Time_Repro_fig.png",
+       width = 12,
+       height = 10,
+       units = "in",
+       dpi = 900)
+
+
+Nitro_Time_All_fig <- ggplot(data=Isotopes, aes(year, N15))+
+  geom_jitter(width = 0.1,
+              size=1,
+              alpha=0.3)+
+  geom_boxplot(aes(group=year),
+               alpha=0.6)+
+  ylab(expression(paste(delta^15, "N (\u2030)", sep = "")))+
+  xlab("Year")
+
+Nitro_Time_All_fig
+
+ggsave(plot=Nitro_Time_All_fig,
+       "Nitro_Time_All_fig.png",
+       width = 6.5,
+       height = 5,
+       units = "in",
+       dpi = 900)
+
+
+
+```
+
+
