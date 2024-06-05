@@ -70,7 +70,8 @@ library(ggiraphExtra)
 library(ggeffects)
 library(gridExtra)
 library(rphylopic)
-
+#remotes::install_github("mastoffel/partR2") 
+library(partR2)
 
 ```
 
@@ -79,10 +80,12 @@ library(rphylopic)
 ## Graphing theme
 
 ```{r}
-
 moose.img <- pick_phylopic(name = "Alces alces")
 bilb.img <- pick_phylopic(name = "Vaccinium")
+```
 
+
+```{r}
 mytheme <- theme(
     axis.text = element_text(size = 10,face = "bold"),
     axis.title = element_text(size = 12, face = "bold"),
@@ -218,6 +221,14 @@ SI_Diet_Mharv$Zcalves_lag <-
 
 ```
 
+## Time lag data
+```{r}
+
+SI_Diet_Tlag <- subset(SI_Diet_Mharv, Moose_Harv_Lag!="")
+
+
+
+```
 
 
 ## Functions
@@ -226,8 +237,7 @@ SI_Diet_Mharv$Zcalves_lag <-
 
 rsq <- function (x, y) cor(x, y) ^ 2
 
-rsq(x=SI_Diet$N15,SI_Diet$Mass)
-
+rsq(x=SI_Diet_Mharv$Bilberry, SI_Diet_Mharv$Calves)
 
 ```
 
@@ -259,6 +269,48 @@ ggplot(data = SI_Diet_Mharv, aes(age,N15))+
   scale_color_viridis(discrete = TRUE,
                       option="C",
                       end=0.95)
+
+
+
+ggplot(data = SI_Diet)+
+  geom_jitter(aes(OAT.BEAR,N15,
+                  color=Repro),
+              width=0.05,
+              alpha=0.5,
+              size=2)+
+  geom_boxplot(aes(OAT.BEAR, N15,
+                   group = OAT.BEAR),
+               alpha=0.4)+
+  scale_color_viridis(option = "C",
+                      discrete = TRUE, end=0.8)
+
+
+ggplot(data = SI_Diet)+
+  geom_jitter(aes(OAT.BEAR,C13.suess,
+                  color=Repro),
+              width=0.05,
+              alpha=0.5,
+              size=2)+
+  geom_boxplot(aes(OAT.BEAR, C13.suess,
+                   group = OAT.BEAR),
+               alpha=0.4)+
+  scale_color_viridis(option = "C",
+                      discrete = TRUE, end=0.8)
+
+table(SI_Diet$OAT.BEAR)
+80/669
+
+Carbon.oats <- lmer(C13.suess~OAT.BEAR+
+                      (1|Repro)+
+                      (1|fYEAR), 
+                    data = SI_Diet)
+summary(Carbon.oats)
+min(SI_Diet$C13.suess)
+max(SI_Diet$C13.suess)
+
+(0.17/(24.23-21.68))*100
+
+
 ```
 
 
@@ -340,7 +392,7 @@ AIcc_Int <- wiqid::AICc(IntMod)
 
 ```{r}
 
-NitrogenModels[[2]] <-YearMod <- lmer(ZN15~Zyear+(1|BearID)+(1|Repro),
+NitrogenModels[[2]] <-YearMod <- lmer(ZN15~fYEAR+(1|BearID)+(1|Repro),
                 data = SI_Diet_Mharv)
 
 summary(YearMod)
@@ -454,10 +506,15 @@ NitrogenModels[[3]] <-MooseHarvMod <-
 ## Calf observation models
 
 ```{r}
-
 ggplot(data = SI_Diet_Mharv)+
   geom_line(aes(Year, Calves))+
+  geom_point(aes(Year,Calves))+
   scale_x_continuous(expand = c(0,0))
+max(SI_Diet_Mharv$Calves)
+```
+
+
+```{r}
 
 CalfMods <- list()
 
@@ -626,7 +683,6 @@ AIcc_Bilb.Int <- wiqid::AICc(IntBilbMod)
 
 ```
 
-When I coompared different relationships between $\delta^{15}N$ values and the bilberry index, the log-linear relationship had more support than the linear or quadratic relationship. However, all three had less suport than the intercept only
 
 
 ```{r}
@@ -722,8 +778,6 @@ Therefore, I created a secondary set of landscape variables that have a 1-year l
 
 ```{r}
 
-SI_Diet_Tlag <- subset(SI_Diet_Mharv, Moose_Harv_Lag!="")
-
 TLModels <- list()
 TLModels[[1]] <- TimeLag.Int <-
   lmer(ZN15~ 1+
@@ -784,8 +838,6 @@ TLModels[[2]] <- Log.MooseHarvMod.Lag
 ### Lagged Moose Calves
 
 ```{r}
-
-
 CalfMods.lag <- list()
 
 CalfMods.lag [[1]] <-Lin.CalfMod.Lag <-
@@ -825,7 +877,11 @@ TLModels[[3]] <-
 
 rsq(x=SI_Diet_Mharv$Calves, y=SI_Diet_Mharv$N15)
 
+```
 
+
+
+```{r}
 ggplot(data = SI_Diet, aes(Year, Mass))+
   geom_point()
 
@@ -841,7 +897,7 @@ MooseObsMods.Lag <- list()
 
 MooseObsMods.Lag[[1]] <-
   Lin.MooseObsMod.Lag <- 
-  lmer(ZN15~ Zcalves_lag+
+  lmer(ZN15~ Zobs_moose_lag+
   (1|BearID)+(1|Repro),
 data = SI_Diet_Tlag) 
 
@@ -850,7 +906,7 @@ AIcc_MooseObs.Lin.Lag <- wiqid::AICc(Lin.MooseObsMod.Lag)
 
 MooseObsMods.Lag[[2]] <-
   Log.MooseObsMod.Lag <- 
-  lmer(ZN15~ Zcalves.ln_lag+
+  lmer(ZN15~ Zobs_moose.ln_lag+
       (1|BearID)+(1|Repro),
     data = SI_Diet_Tlag) 
 summary(Log.MooseObsMod.Lag)
@@ -859,8 +915,8 @@ AIcc_MooseObs.Log.Lag <- wiqid::AICc(Log.MooseObsMod.Lag)
 
 MooseObsMods.Lag[[3]] <-
   Quad.MooseObsMod.Lag <-
-  lmer(ZN15~Zcalves_lag+
-      Zcalves.quad_lag+
+  lmer(ZN15~Zobs_moose_lag+
+      Zobs_moose.quad_lag+
       (1|BearID)+(1|Repro),
     data = SI_Diet_Tlag)
 
@@ -870,9 +926,9 @@ AIcc_MooseObs.Quad.Lag <- wiqid::AICc(Quad.MooseObsMod.Lag)
 print(AIcc_MooseObs.Lin.Lag)
 print(AIcc_MooseObs.Log.Lag)
 print(AIcc_MooseObs.Quad.Lag)
-summary(Lin.MooseObsMod.Lag)
+summary(Quad.MooseObsMod.Lag)
 
-TLModels[[4]] <-  Lin.MooseObsMod.Lag
+TLModels[[4]] <-  Quad.MooseObsMod.Lag
 
 ```
 
@@ -967,12 +1023,65 @@ AIcc_AgexSexLag <- wiqid::AICc(AgexSexMod.Lag)
 
 TLModels[[9]] <-  
   AgexSexBilbMod.Lag <- 
-  lmer(ZN15~ Zage+sex+Zage*sex+Zbilb_lag+
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zbilb_lag+
          (1|BearID)+(1|Repro),
        data = SI_Diet_Tlag)
 
 summary(AgexSexBilbMod.Lag)
 AIcc_AgexSexBilbLag <- wiqid::AICc(AgexSexBilbMod.Lag)
+
+
+AgeMod.Lag <- 
+  lmer(ZN15~ Zage+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgeMod.Lag)
+AIcc_AgeLag <- wiqid::AICc(AgeMod.Lag)
+
+
+YRMod.Lag <- 
+  lmer(ZN15~ fYEAR+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(YRMod.Lag)
+AIcc_YearLag <- wiqid::AICc(YRMod.Lag)
+
+
+
+SexMod.Lag <- 
+  lmer(ZN15~ sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(SexMod.Lag)
+AIcc_SexLag <- wiqid::AICc(SexMod.Lag)
+
+
+AgeSexMod.Lag <- 
+  lmer(ZN15~ Zage+
+         sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgeSexMod.Lag)
+AIcc_AgeSexLag <- wiqid::AICc(AgeSexMod.Lag)
+
+
+
+AgexSexMod.Lag <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSexMod.Lag)
+AIcc_AgexSexLag <- wiqid::AICc(AgexSexMod.Lag)
 
 
 
@@ -1005,40 +1114,65 @@ AIcc_AgexSexMharvbMod.Lag <- wiqid::AICc(AgexSexMharvbMod.Lag)
 AIcc_AgexSexMharvbMod.Lag-AIcc_AgexSexBilbMharvLag
 
 
-```
-
-
-
-```{r}
-
-
-
-TLModels[[11]] <-  
-  AgexSexBilbMod.LagData <- 
-  lmer(ZN15~ Zage+sex+Zage*sex+Zbilb+
-         (1|BearID)+(1|Repro),
-       data = SI_Diet_Tlag)
-
-summary(AgexSexBilbMod.LagData)
-AIcc_AgexSexBilbLagData <- wiqid::AICc(AgexSexBilbMod.LagData)
-
 
 
 TLModels[[12]] <-  
-  AgexSexBilMharvbMod.LagData <- 
+  AgexSex_Bilb_LagDat <- 
   lmer(ZN15~ Zage+
          sex+
          Zage*sex+
          Zbilb+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSex_Bilb_LagDat)
+AIcc_AgexSex_Bilb_LagDat <- wiqid::AICc(AgexSex_Bilb_LagDat)
+
+
+
+TLModels[[13]] <-  
+  AgexSex_MooseHarv_LagDat <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
          Zharvest_moose+
          (1|BearID)+(1|Repro),
        data = SI_Diet_Tlag)
 
+summary(AgexSex_MooseHarv_LagDat)
+AIcc_AgexSex_MooseHarv_LagDat <- wiqid::AICc(AgexSex_MooseHarv_LagDat)
 
+
+TLModels[[14]] <-  
+  AgexSex_Bilb_MooseHarv_LagDat <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zbilb_lag+
+         Zharvest_moose+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSex_Bilb_MooseHarv_LagDat)
+AIcc_AgexSex_Bilb_MooseHarv_LagDat <-
+  wiqid::AICc(AgexSex_Bilb_MooseHarv_LagDat)
+
+
+TLModels[[15]] <-  
+  AgexSex_Bilbxsex.Lag <- 
+  lmer(ZN15~ Zage+
+         sex+
+         Zage*sex+
+         Zbilb_lag+
+         Zbilb_lag*sex+
+         (1|BearID)+(1|Repro),
+       data = SI_Diet_Tlag)
+
+summary(AgexSex_Bilbxsex.Lag)
+AIcc_AgexSexBilbxsexLag <- wiqid::AICc(AgexSex_Bilbxsex.Lag)
 
 
 ```
-
 
 
 
@@ -1091,8 +1225,13 @@ TLModelNames <- c("Intercept",
                   "Age times sex",
                   "Age times sex, Lbilberry",
                   "Age times sex, Lbilberry, LmooseHarv",
+                  "Age times sex, LmooseHarv",
                   "Age times sex, bilberry with lagged data",
-                  "Age times sex, bilberry, mooseHarv with lagged data")
+                  "Age times sex, mooseHarv with lagged data",
+                  "Age times sex, bilberry, mooseHarv with lagged data",
+                  "Age times sex, Lbilberry times sex")
+
+print(TLModelNames)
 
 ##Generate and print AICc table
 print(aictab(cand.set = TLModels,
